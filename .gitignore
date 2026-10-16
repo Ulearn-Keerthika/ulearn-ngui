@@ -43,3 +43,14 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 .vercel
+# Environment & secrets
+.env
+.env.*
+!.env.example
+src/environments/environment.ts
+src/environments/environment.development.ts
+.cursor/mcp.json
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
