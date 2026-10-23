@@ -23,7 +23,9 @@ export const STAFF_PERMISSIONS: StaffPermission[] = [
   { key: 'stories.manage', group: 'Site', label: 'Student stories' },
   { key: 'settings.manage', group: 'Control', label: 'Site settings' },
   { key: 'labels.manage', group: 'Control', label: 'Labels and members' },
-  { key: 'promotions.send', group: 'Control', label: 'Promotion emails' }
+  { key: 'promotions.send', group: 'Control', label: 'Promotion emails' },
+  { key: 'crt.access', group: 'Student features', label: 'Allowed CRT' },
+  { key: 'interview.access', group: 'Student features', label: 'Allowed Interview' }
 ];
 
 export interface AdminNavItem {

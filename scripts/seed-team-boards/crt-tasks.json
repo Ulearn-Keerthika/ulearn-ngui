@@ -1,0 +1,194 @@
+{
+  "milestones": [
+    {
+      "title": "Phase 0 — Foundations",
+      "description": "Access, repo setup, ULearn integration contracts, and team working agreements."
+    },
+    {
+      "title": "Phase 1 — Content & paths",
+      "description": "Syllabus, modules, question bank authoring, and learning paths."
+    },
+    {
+      "title": "Phase 2 — Practice engine",
+      "description": "Timed practice, sectional tests, coding drills, and progress storage."
+    },
+    {
+      "title": "Phase 3 — Assessments & readiness",
+      "description": "Mocks, scoring, readiness score, certificates/badges."
+    },
+    {
+      "title": "Phase 4 — Campus & company packs",
+      "description": "College/batch ops, company packs, calendars, announcements."
+    },
+    {
+      "title": "Phase 5 — Mentors & analytics",
+      "description": "Mentor dashboards, interventions, CRT analytics."
+    },
+    {
+      "title": "Phase 6 — Hardening",
+      "description": "Performance, QA, accessibility, docs, handoff."
+    }
+  ],
+  "labels": [
+    { "name": "role/frontend", "color": "1D76DB", "description": "UI / Angular work" },
+    { "name": "role/backend", "color": "0E8A16", "description": "Supabase / APIs / RLS" },
+    { "name": "role/shared", "color": "5319E7", "description": "Both members" },
+    { "name": "type/feature", "color": "0075CA", "description": "Feature delivery" },
+    { "name": "type/spike", "color": "FBCA04", "description": "Research / design spike" },
+    { "name": "priority/P0", "color": "B60205", "description": "Must ship first" },
+    { "name": "priority/P1", "color": "D93F0B", "description": "High" },
+    { "name": "priority/P2", "color": "FEF2C0", "description": "Later" }
+  ],
+  "issues": [
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "CRT-001: Project charter & definition of done",
+      "labels": ["role/shared", "type/spike", "priority/P0"],
+      "body": "## Goal\nAgree how Team A works and what “done” means for every CRT task.\n\n## Description\nWrite a short charter covering scope, out-of-scope (Interview is Team B), sprint cadence, PR rules, and Definition of Done.\n\n## Tasks\n- List in-scope CRT modules for v1 vs later\n- Define DoD: UI + RLS + tests/manual checklist + docs note\n- Define how you integrate with ULearn `crt.access` permission\n\n## Expected output\n- `CHARTER.md` in this repo\n- DoD checklist copied into issue templates\n- Explicit list of systems you will NOT build (Auth, Labels admin, Interview)"
+    },
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "CRT-002: ULearn integration contract (auth + Allowed CRT)",
+      "labels": ["role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nCRT must only open for users with `crt.access`.\n\n## Description\nDocument and implement the contract with the main ULearn app: login session, permission check, redirect when denied.\n\n## Tasks\n- Confirm `crt.access` and label `allowed_crt` in Supabase\n- Document how CRT UI reads `AuthService.hasPermission('crt.access')` (or equivalent API)\n- Deny access path for students without permission\n\n## Expected output\n- `docs/ULEARN_CONTRACT.md`\n- Working gate on `/crt` (or CRT shell route)\n- Manual test notes: with permission → enter; without → blocked"
+    },
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "CRT-003: CRT information architecture & wireframes",
+      "labels": ["role/frontend", "type/spike", "priority/P0"],
+      "body": "## Goal\nClear student + admin screens before building.\n\n## Description\nWireframe student home, path detail, practice session, results, and CRT admin content screens.\n\n## Tasks\n- Student: CRT home, path, practice, result\n- Admin: modules, questions, assign path to batch\n- Empty / loading / error states\n\n## Expected output\n- Figma or markdown wireframes in `docs/wireframes/`\n- Screen inventory checklist approved by product owner"
+    },
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "CRT-004: Database schema v1 for CRT",
+      "labels": ["role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nSupabase tables for CRT content and progress with RLS.\n\n## Description\nDesign tables: tracks/paths, modules, questions, attempts, scores. RLS: students read published + own attempts; CRT admins manage content.\n\n## Tasks\n- ERD\n- Migration SQL with RLS\n- Seed 1 sample path with 5 questions\n\n## Expected output\n- Migration file applied on linked project (or PR-ready)\n- ERD in `docs/schema.md`\n- RLS verified with student vs admin roles"
+    },
+    {
+      "milestone": "Phase 1 — Content & paths",
+      "title": "CRT-010: Learning path & module CRUD (admin)",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nCRT admins create paths (e.g. Service company track) and modules (Aptitude, Reasoning…).\n\n## Description\nAdmin UI + APIs to create/edit/reorder modules inside a path. Publish/draft status.\n\n## Expected output\n- Admin screens for path/module CRUD\n- Draft vs published behavior\n- Demo path “Campus Service Track v1” created"
+    },
+    {
+      "milestone": "Phase 1 — Content & paths",
+      "title": "CRT-011: Question bank authoring (MCQ)",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nAuthors add MCQs with topic tags, difficulty, explanation, correct option.\n\n## Description\nSupport create/edit/delete, filter by topic/difficulty, attach to modules.\n\n## Expected output\n- Question form with validation\n- List + filters\n- At least 30 seeded MCQs across 3 topics\n- Students never see `correct_index` outside review-after-submit flows"
+    },
+    {
+      "milestone": "Phase 1 — Content & paths",
+      "title": "CRT-012: Bulk question import (CSV/Excel)",
+      "labels": ["role/backend", "type/feature", "priority/P1"],
+      "body": "## Goal\nImport large banks without one-by-one entry.\n\n## Description\nCSV/XLSX template + import job with row errors reported.\n\n## Expected output\n- Downloadable template\n- Import report: success/fail per row\n- Imported questions appear in bank"
+    },
+    {
+      "milestone": "Phase 1 — Content & paths",
+      "title": "CRT-013: Student CRT home & path enrollment",
+      "labels": ["role/frontend", "type/feature", "priority/P0"],
+      "body": "## Goal\nAllowed-CRT students see their paths and continue where they left off.\n\n## Description\nHome shows assigned paths, progress %, next recommended module.\n\n## Expected output\n- `/crt` home with progress cards\n- Continue CTA\n- Empty state when no path assigned"
+    },
+    {
+      "milestone": "Phase 2 — Practice engine",
+      "title": "CRT-020: Timed practice session (MCQ)",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nStudent starts a timed practice set and submits answers.\n\n## Description\nTimer, question navigator, autosave answers, submit, prevent continue after time.\n\n## Expected output\n- Practice session UI\n- Server-validated time window / duration\n- Attempt row stored with answers JSON\n- Result summary page (score, time used)"
+    },
+    {
+      "milestone": "Phase 2 — Practice engine",
+      "title": "CRT-021: Sectional practice (topic filters)",
+      "labels": ["role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nPractice only one topic (e.g. percentages) for a chosen count/time.\n\n## Expected output\n- Topic picker\n- Configurable question count\n- Results broken down by topic"
+    },
+    {
+      "milestone": "Phase 2 — Practice engine",
+      "title": "CRT-022: Coding drill MVP (reuse patterns)",
+      "labels": ["role/backend", "role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nSimple coding practice problems with public tests.\n\n## Description\nAlign with existing exam coding patterns if possible; keep CRT coding lighter than recruitment exams.\n\n## Expected output\n- Coding problem schema\n- Run public tests\n- Store submission + pass/fail\n- 5 sample coding drills"
+    },
+    {
+      "milestone": "Phase 2 — Practice engine",
+      "title": "CRT-023: Attempt history & review mode",
+      "labels": ["role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nStudents review past attempts with explanations after submit.\n\n## Expected output\n- History list\n- Review screen: chosen vs correct + explanation\n- No review of correct answers mid-attempt"
+    },
+    {
+      "milestone": "Phase 3 — Assessments & readiness",
+      "title": "CRT-030: Full mock CRT test",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nMulti-section mock mimicking a campus drive day.\n\n## Description\nFixed blueprint (e.g. 60Q / 60min or configurable), one attempt policy option, score report.\n\n## Expected output\n- Mock configuration in admin\n- Student start/submit flow\n- Section-wise score report"
+    },
+    {
+      "milestone": "Phase 3 — Assessments & readiness",
+      "title": "CRT-031: Readiness score engine",
+      "labels": ["role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nCompute a 0–100 readiness score from recent practice + mocks.\n\n## Description\nDocument formula (weights for accuracy, speed, coverage, mock score). Recalculate on attempt complete.\n\n## Expected output\n- Documented formula in `docs/readiness.md`\n- Stored readiness per student per path\n- Visible on CRT home"
+    },
+    {
+      "milestone": "Phase 3 — Assessments & readiness",
+      "title": "CRT-032: Topic mastery heatmap",
+      "labels": ["role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nShow weak/strong topics visually.\n\n## Expected output\n- Heatmap or skill bars on profile/path page\n- Data from attempts aggregated by topic tag"
+    },
+    {
+      "milestone": "Phase 3 — Assessments & readiness",
+      "title": "CRT-033: Certificates / badges MVP",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P2"],
+      "body": "## Goal\nAward a badge when readiness ≥ threshold or mock passed.\n\n## Expected output\n- Badge rules config\n- Badge shown on CRT profile\n- Optional shareable certificate PDF/PNG"
+    },
+    {
+      "milestone": "Phase 4 — Campus & company packs",
+      "title": "CRT-040: Assign path to college batch",
+      "labels": ["role/backend", "role/frontend", "type/feature", "priority/P0"],
+      "body": "## Goal\nCampus/CRT admin assigns a learning path to a ULearn batch.\n\n## Expected output\n- Assignment UI\n- All batch members with `crt.access` see the path\n- Audit: who assigned when"
+    },
+    {
+      "milestone": "Phase 4 — Campus & company packs",
+      "title": "CRT-041: Company pack content model",
+      "labels": ["role/backend", "type/feature", "priority/P1"],
+      "body": "## Goal\nPackage questions + tips per company (TCS, Infosys, etc.).\n\n## Expected output\n- `company_packs` schema\n- Admin CRUD\n- Student can open a pack and practice"
+    },
+    {
+      "milestone": "Phase 4 — Campus & company packs",
+      "title": "CRT-042: Placement calendar & announcements",
+      "labels": ["role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nCRT-only announcements and drive dates for a college.\n\n## Expected output\n- Calendar list UI\n- Announcement create (admin)\n- Visible only to Allowed CRT students"
+    },
+    {
+      "milestone": "Phase 4 — Campus & company packs",
+      "title": "CRT-043: College/batch leaderboard",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P2"],
+      "body": "## Goal\nScoped leaderboard (batch or college) for weekly practice/mocks.\n\n## Expected output\n- Leaderboard page with scope selector\n- Privacy: opt-out or display name rules documented"
+    },
+    {
+      "milestone": "Phase 5 — Mentors & analytics",
+      "title": "CRT-050: Mentor dashboard (at-risk students)",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P1"],
+      "body": "## Goal\nMentors see who is inactive or below readiness threshold.\n\n## Expected output\n- Dashboard table with filters\n- Link to student CRT summary\n- Export CSV"
+    },
+    {
+      "milestone": "Phase 5 — Mentors & analytics",
+      "title": "CRT-051: Assign remedial module",
+      "labels": ["role/backend", "type/feature", "priority/P1"],
+      "body": "## Goal\nMentor pushes a remedial module to selected students.\n\n## Expected output\n- Assign action from dashboard\n- Student notified on CRT home\n- Completion tracked"
+    },
+    {
+      "milestone": "Phase 5 — Mentors & analytics",
+      "title": "CRT-052: CRT analytics (funnel + content quality)",
+      "labels": ["role/backend", "role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nAdmin analytics: practice starts → completes → mock → ready; questions with high fail rate.\n\n## Expected output\n- Analytics page\n- Funnel metrics\n- “Bad questions” report"
+    },
+    {
+      "milestone": "Phase 6 — Hardening",
+      "title": "CRT-060: Performance, empty states, accessibility pass",
+      "labels": ["role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nProduction-ready student UX.\n\n## Expected output\n- Lighthouse/mobile checklist\n- Keyboard nav for practice UI\n- Documented known issues"
+    },
+    {
+      "milestone": "Phase 6 — Hardening",
+      "title": "CRT-061: QA test plan & handoff demo",
+      "labels": ["role/shared", "type/spike", "priority/P0"],
+      "body": "## Goal\nEnd-to-end demo for product owner.\n\n## Expected output\n- `docs/QA_PLAN.md` with cases\n- Recorded or live demo script\n- Handoff notes for ULearn integration owners"
+    }
+  ]
+}

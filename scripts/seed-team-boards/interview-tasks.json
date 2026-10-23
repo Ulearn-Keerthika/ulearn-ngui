@@ -1,0 +1,201 @@
+{
+  "milestones": [
+    {
+      "title": "Phase 0 — Foundations",
+      "description": "Access, AI cost limits, ULearn contract, team working agreements."
+    },
+    {
+      "title": "Phase 1 — Session engine",
+      "description": "Interview types, start/end session, transcript storage, quotas."
+    },
+    {
+      "title": "Phase 2 — AI interviewer & rubrics",
+      "description": "Prompting, follow-ups, scoring rubrics, evaluation versions."
+    },
+    {
+      "title": "Phase 3 — Feedback & coaching",
+      "description": "Scorecards, feedback, redo compare, drill suggestions."
+    },
+    {
+      "title": "Phase 4 — Voice & coding-in-interview",
+      "description": "Voice mode, coding pane, system-design templates."
+    },
+    {
+      "title": "Phase 5 — Mentors, integrity, campus ops",
+      "description": "Human review, quotas by college, integrity signals."
+    },
+    {
+      "title": "Phase 6 — Hardening",
+      "description": "Cost controls, safety, QA, handoff."
+    }
+  ],
+  "labels": [
+    { "name": "role/frontend", "color": "1D76DB", "description": "UI / Angular work" },
+    { "name": "role/backend", "color": "0E8A16", "description": "Supabase / AI APIs / RLS" },
+    { "name": "role/shared", "color": "5319E7", "description": "Both members" },
+    { "name": "role/ai", "color": "E99695", "description": "LLM / prompts / eval" },
+    { "name": "type/feature", "color": "0075CA", "description": "Feature delivery" },
+    { "name": "type/spike", "color": "FBCA04", "description": "Research / design spike" },
+    { "name": "priority/P0", "color": "B60205", "description": "Must ship first" },
+    { "name": "priority/P1", "color": "D93F0B", "description": "High" },
+    { "name": "priority/P2", "color": "FEF2C0", "description": "Later" }
+  ],
+  "issues": [
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "INT-001: Project charter & definition of done",
+      "labels": ["role/shared", "type/spike", "priority/P0"],
+      "body": "## Goal\nAgree Team B scope and quality bar.\n\n## Description\nCRT is Team A. Interview owns conversational mocks, rubrics, feedback, voice, quotas.\n\n## Expected output\n- `CHARTER.md`\n- DoD checklist\n- Out-of-scope list (CRT syllabus, aptitude banks)"
+    },
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "INT-002: ULearn integration contract (Allowed Interview)",
+      "labels": ["role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nOnly users with `interview.access` can use Interview.\n\n## Expected output\n- `docs/ULEARN_CONTRACT.md`\n- Gate on `/interview`\n- Manual tests: allowed vs denied"
+    },
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "INT-003: AI provider spike (cost, latency, safety)",
+      "labels": ["role/ai", "type/spike", "priority/P0"],
+      "body": "## Goal\nChoose model/provider for text mocks and estimate cost per 30-min session.\n\n## Description\nCompare options; define secrets handling (never in frontend); outline prompt safety.\n\n## Expected output\n- `docs/AI_PROVIDER.md` with recommendation\n- Rough cost table (tokens/minutes)\n- Safety constraints list"
+    },
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "INT-004: Database schema v1 for Interview",
+      "labels": ["role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nTables for interview templates, sessions, turns, scores, quotas with RLS.\n\n## Expected output\n- ERD + migration + RLS\n- Seed 2 templates (HR behavioral, SDE technical)\n- Students only read own sessions"
+    },
+    {
+      "milestone": "Phase 0 — Foundations",
+      "title": "INT-005: Wireframes — session, feedback, admin templates",
+      "labels": ["role/frontend", "type/spike", "priority/P0"],
+      "body": "## Goal\nUX before build.\n\n## Expected output\n- Wireframes in `docs/wireframes/`\n- Screen inventory signed off"
+    },
+    {
+      "milestone": "Phase 1 — Session engine",
+      "title": "INT-010: Interview catalog (types & durations)",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nStudent picks interview type and duration.\n\n## Expected output\n- Catalog UI\n- Templates: HR, Technical DSA, Domain (at least 3)\n- Start button creates a session row"
+    },
+    {
+      "milestone": "Phase 1 — Session engine",
+      "title": "INT-011: Text interview session loop",
+      "labels": ["role/frontend", "role/backend", "role/ai", "type/feature", "priority/P0"],
+      "body": "## Goal\nChat-style interview: AI asks → student answers → AI follow-up until time/questions done.\n\n## Description\nAll AI calls via edge function (service role / secret). Persist each turn.\n\n## Expected output\n- Session UI with timer\n- Edge function `interview-turn` (name flexible)\n- Turns stored; session end state"
+    },
+    {
+      "milestone": "Phase 1 — Session engine",
+      "title": "INT-012: Quotas (mocks per week)",
+      "labels": ["role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nFair use + cost control.\n\n## Expected output\n- Configurable default quota\n- Block start when quota exceeded with clear message\n- Admin can adjust quota per college later (stub OK)"
+    },
+    {
+      "milestone": "Phase 1 — Session engine",
+      "title": "INT-013: Session history list",
+      "labels": ["role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nStudents see past mocks and open feedback.\n\n## Expected output\n- History page\n- Status: in progress / completed / failed\n- Link to scorecard"
+    },
+    {
+      "milestone": "Phase 2 — AI interviewer & rubrics",
+      "title": "INT-020: Persona & prompt CMS",
+      "labels": ["role/ai", "role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nAdmins edit interviewer persona and system prompts without code deploys.\n\n## Expected output\n- Admin UI or secured config table\n- Version field on prompts\n- Sessions store prompt version used"
+    },
+    {
+      "milestone": "Phase 2 — AI interviewer & rubrics",
+      "title": "INT-021: Rubric model & scoring job",
+      "labels": ["role/ai", "role/backend", "type/feature", "priority/P0"],
+      "body": "## Goal\nAfter session, score competencies (clarity, depth, STAR, correctness, communication).\n\n## Expected output\n- Rubric schema\n- Post-session evaluation function\n- Scores + short rationale per competency\n- Evaluation version stored"
+    },
+    {
+      "milestone": "Phase 2 — AI interviewer & rubrics",
+      "title": "INT-022: Resume-aware questioning (MVP)",
+      "labels": ["role/ai", "type/feature", "priority/P1"],
+      "body": "## Goal\nOptional resume text/PDF → questions about projects.\n\n## Expected output\n- Upload/paste resume\n- At least 2 resume-grounded questions in session\n- Privacy note in UI"
+    },
+    {
+      "milestone": "Phase 2 — AI interviewer & rubrics",
+      "title": "INT-023: Safety filters & jailbreak resistance",
+      "labels": ["role/ai", "type/feature", "priority/P1"],
+      "body": "## Goal\nRefuse leaking answers, toxic content, off-platform misuse.\n\n## Expected output\n- Policy doc\n- Automated test prompts + expected refusals\n- Logging for safety events (no raw secrets)"
+    },
+    {
+      "milestone": "Phase 3 — Feedback & coaching",
+      "title": "INT-030: Scorecard & transcript UI",
+      "labels": ["role/frontend", "type/feature", "priority/P0"],
+      "body": "## Goal\nReadable feedback after each mock.\n\n## Expected output\n- Overall score + competency radar/bars\n- Full transcript\n- Strengths / improvements bullets"
+    },
+    {
+      "milestone": "Phase 3 — Feedback & coaching",
+      "title": "INT-031: Suggested drills from weak competencies",
+      "labels": ["role/ai", "role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nTurn feedback into next actions.\n\n## Expected output\n- 3–5 drill suggestions per completed session\n- Optional deep-link stubs to CRT topics (contract only; CRT builds content)"
+    },
+    {
+      "milestone": "Phase 3 — Feedback & coaching",
+      "title": "INT-032: Redo same interview seed (progress compare)",
+      "labels": ["role/backend", "role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nRetake with same template/seed and compare scores.\n\n## Expected output\n- Redo action\n- Side-by-side score compare view"
+    },
+    {
+      "milestone": "Phase 3 — Feedback & coaching",
+      "title": "INT-033: Export feedback PDF",
+      "labels": ["role/frontend", "type/feature", "priority/P2"],
+      "body": "## Goal\nDownloadable feedback for mentors/students.\n\n## Expected output\n- PDF download\n- Includes scores + summary (not necessarily full raw chain-of-thought)"
+    },
+    {
+      "milestone": "Phase 4 — Voice & coding-in-interview",
+      "title": "INT-040: Voice interview MVP",
+      "labels": ["role/frontend", "role/backend", "role/ai", "type/feature", "priority/P1"],
+      "body": "## Goal\nSpeak answers (STT) and hear questions (TTS) or hybrid.\n\n## Expected output\n- Mic permission UX\n- Voice session mode\n- Cost/latency notes updated in AI_PROVIDER.md\n- Fallback to text if mic fails"
+    },
+    {
+      "milestone": "Phase 4 — Voice & coding-in-interview",
+      "title": "INT-041: Coding pane inside technical interview",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P1"],
+      "body": "## Goal\nDuring technical mocks, present a coding problem with editor + public tests.\n\n## Expected output\n- Coding step in technical template\n- Store code + test results on session\n- Rubric includes coding competency"
+    },
+    {
+      "milestone": "Phase 4 — Voice & coding-in-interview",
+      "title": "INT-042: System design structured template",
+      "labels": ["role/frontend", "type/feature", "priority/P2"],
+      "body": "## Goal\nGuided system-design answers (requirements, API, data, scaling) without full whiteboard v1.\n\n## Expected output\n- Structured form + AI follow-ups\n- Scored against design rubric"
+    },
+    {
+      "milestone": "Phase 5 — Mentors, integrity, campus ops",
+      "title": "INT-050: Mentor review & score override",
+      "labels": ["role/frontend", "role/backend", "type/feature", "priority/P1"],
+      "body": "## Goal\nMentors open completed sessions, comment, override AI scores with audit trail.\n\n## Expected output\n- Mentor queue/list\n- Override form + reason required\n- History of score changes"
+    },
+    {
+      "milestone": "Phase 5 — Mentors, integrity, campus ops",
+      "title": "INT-051: Integrity soft signals",
+      "labels": ["role/frontend", "type/feature", "priority/P2"],
+      "body": "## Goal\nTab blur counts / paste warnings (soft), separate from skill score.\n\n## Expected output\n- Integrity score field\n- Student-facing soft warning\n- Mentor can see integrity flags"
+    },
+    {
+      "milestone": "Phase 5 — Mentors, integrity, campus ops",
+      "title": "INT-052: College analytics & cost dashboard",
+      "labels": ["role/backend", "role/frontend", "type/feature", "priority/P1"],
+      "body": "## Goal\nSessions completed, average scores, estimated AI cost by college/batch.\n\n## Expected output\n- Admin analytics page\n- Cost estimate from token/minute logs\n- Export CSV"
+    },
+    {
+      "milestone": "Phase 6 — Hardening",
+      "title": "INT-060: Rate limits, retries, failure UX",
+      "labels": ["role/backend", "role/frontend", "type/feature", "priority/P0"],
+      "body": "## Goal\nGraceful handling when AI provider fails or is slow.\n\n## Expected output\n- Retry policy\n- User-visible error states\n- Session can be marked failed without losing transcript so far"
+    },
+    {
+      "milestone": "Phase 6 — Hardening",
+      "title": "INT-061: Consent, retention, privacy checklist",
+      "labels": ["role/shared", "type/spike", "priority/P0"],
+      "body": "## Goal\nEspecially for voice/recordings later.\n\n## Expected output\n- `docs/PRIVACY.md`\n- Consent checkbox copy\n- Retention defaults documented"
+    },
+    {
+      "milestone": "Phase 6 — Hardening",
+      "title": "INT-062: QA test plan & handoff demo",
+      "labels": ["role/shared", "type/spike", "priority/P0"],
+      "body": "## Goal\nE2E demo for product owner.\n\n## Expected output\n- `docs/QA_PLAN.md`\n- Demo script (HR mock + technical mock + feedback)\n- Handoff notes for ULearn owners"
+    }
+  ]
+}

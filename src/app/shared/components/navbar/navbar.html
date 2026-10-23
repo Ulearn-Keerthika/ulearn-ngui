@@ -79,7 +79,14 @@
       </a>
       <a class="nav-link" routerLink="/about" routerLinkActive="active">About</a>
 
-      @if (auth.isAdmin()) {
+      @if (auth.isLoggedIn() && auth.hasPermission('crt.access')) {
+        <a class="nav-link" routerLink="/crt" routerLinkActive="active">CRT</a>
+      }
+      @if (auth.isLoggedIn() && auth.hasPermission('interview.access')) {
+        <a class="nav-link" routerLink="/interview" routerLinkActive="active">Interview</a>
+      }
+
+      @if (auth.canAccessPortal()) {
         <a class="nav-link" routerLink="/admin" routerLinkActive="active">Admin Panel</a>
       }
 
@@ -101,6 +108,18 @@
               <span class="dot" style="background: var(--blue)"></span>
               My Courses
             </a>
+            @if (auth.hasPermission('crt.access')) {
+              <a routerLink="/crt" (click)="closeUserMenu()">
+                <span class="dot" style="background: var(--green)"></span>
+                CRT
+              </a>
+            }
+            @if (auth.hasPermission('interview.access')) {
+              <a routerLink="/interview" (click)="closeUserMenu()">
+                <span class="dot" style="background: var(--orange)"></span>
+                Interview
+              </a>
+            }
             <a routerLink="/profile" (click)="closeUserMenu()">
               <span class="dot" style="background: var(--purple)"></span>
               My Profile
@@ -221,7 +240,14 @@
   </div>
   <div class="drawer-item" (click)="navigateWithQuery('/about', {})">About</div>
 
-  @if (auth.isAdmin()) {
+  @if (auth.isLoggedIn() && auth.hasPermission('crt.access')) {
+    <div class="drawer-item" (click)="navigateWithQuery('/crt', {})">CRT</div>
+  }
+  @if (auth.isLoggedIn() && auth.hasPermission('interview.access')) {
+    <div class="drawer-item" (click)="navigateWithQuery('/interview', {})">Interview</div>
+  }
+
+  @if (auth.canAccessPortal()) {
     <div class="drawer-item" (click)="navigateWithQuery('/admin', {})">Admin Panel</div>
   }
 

@@ -1,0 +1,255 @@
+{
+  "labels": [
+    { "name": "team/crt", "color": "0E8A16", "description": "CRT team" },
+    { "name": "team/interview", "color": "1D76DB", "description": "AI Interview team" },
+    { "name": "role/frontend", "color": "5319E7", "description": "UI work" },
+    { "name": "role/backend", "color": "BFDADC", "description": "Database / API work" },
+    { "name": "role/shared", "color": "FBCA04", "description": "Both members on the team" },
+    { "name": "priority/P0", "color": "B60205", "description": "Do first" },
+    { "name": "priority/P1", "color": "D93F0B", "description": "Do next" },
+    { "name": "priority/P2", "color": "C2E0C6", "description": "Later" }
+  ],
+  "milestones": [
+    { "title": "CRT · Phase 0 — Setup", "description": "CRT team: access gate, screens plan, database start." },
+    { "title": "CRT · Phase 1 — Learn & practice", "description": "CRT team: paths, questions, timed practice." },
+    { "title": "CRT · Phase 2 — Mocks & readiness", "description": "CRT team: full mocks, readiness score, review." },
+    { "title": "CRT · Phase 3 — Campus & packs", "description": "CRT team: assign to batches, company packs, announcements." },
+    { "title": "CRT · Phase 4 — Mentors & polish", "description": "CRT team: mentor tools, analytics, QA." },
+    { "title": "Interview · Phase 0 — Setup", "description": "Interview team: access gate, AI plan, database start." },
+    { "title": "Interview · Phase 1 — Text mock", "description": "Interview team: start a text AI interview and finish it." },
+    { "title": "Interview · Phase 2 — Scores & feedback", "description": "Interview team: scorecard, transcript, coaching tips." },
+    { "title": "Interview · Phase 3 — Voice & coding", "description": "Interview team: speak answers, code during technical mock." },
+    { "title": "Interview · Phase 4 — Mentors & polish", "description": "Interview team: mentor review, quotas, QA." }
+  ],
+  "issues": [
+    {
+      "milestone": "CRT · Phase 0 — Setup",
+      "title": "CRT: Student with Allowed CRT can open CRT; others cannot",
+      "labels": ["team/crt", "role/shared", "priority/P0"],
+      "body": "## What to build\nFinish the CRT entry so permission actually controls the product.\n\n## Clear work\n1. Keep `/crt` behind `crt.access`.\n2. Show CRT in the navbar only when the signed-in user has Allowed CRT.\n3. If someone opens `/crt` without permission, send them home with a clear message (or no CRT link).\n4. Write a short note in the issue comments: how an admin grants access (Labels → Allowed CRT → add member).\n\n## Expected outcomes (what people get)\n- **Admin:** Can give a student CRT access by adding them to the **Allowed CRT** label (or any label with Allowed CRT permission). Students without that access never see CRT.\n- **Student with access:** Sees **CRT** in the menu and can open the CRT page.\n- **Student without access:** Does not see CRT in the menu and cannot use `/crt`.\n\n## Done when\nDemo: one allowed student enters CRT; one normal student cannot."
+    },
+    {
+      "milestone": "CRT · Phase 0 — Setup",
+      "title": "CRT: Draw the student and admin screens before coding features",
+      "labels": ["team/crt", "role/frontend", "priority/P0"],
+      "body": "## What to build\nSimple screen list + rough layout (Figma or markdown sketches).\n\n## Clear work\nSketch at least:\n1. Student CRT home\n2. Practice test screen\n3. Result / review screen\n4. Admin: create path / add questions\n\n## Expected outcomes (what people get)\n- **Product owner / team:** Agrees what CRT will look like before weeks of coding.\n- **Admin (later):** Will get screens that match this plan (paths, questions, assign).\n- **Student (later):** Will get a clear home → practice → result flow.\n\n## Done when\nSketches are linked in this issue and approved in a short review comment."
+    },
+    {
+      "milestone": "CRT · Phase 0 — Setup",
+      "title": "CRT: Database for paths, questions, and student attempts",
+      "labels": ["team/crt", "role/backend", "priority/P0"],
+      "body": "## What to build\nSupabase tables + RLS for CRT content and practice attempts.\n\n## Clear work\n1. Tables for learning paths, modules, questions, attempts.\n2. Students can only read published content and **their own** attempts.\n3. Only staff with CRT admin rights (or existing admin) can create/edit questions.\n4. Seed one sample path with a few questions for demos.\n\n## Expected outcomes (what people get)\n- **Admin:** Can store CRT courses and questions in the system safely.\n- **Student:** Their practice answers stay private to them (and admins who need reports).\n- **Team:** A real data foundation so UI work is not fake/local-only.\n\n## Done when\nMigration applied; student vs admin access tested; sample path exists."
+    },
+    {
+      "milestone": "CRT · Phase 1 — Learn & practice",
+      "title": "CRT: Admin can create a learning path and modules",
+      "labels": ["team/crt", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nAdmin UI to create a CRT path (example: “Service company track”) and modules inside it (Aptitude, Reasoning, Verbal…).\n\n## Clear work\n1. Create / rename / reorder modules.\n2. Draft vs Published.\n3. Only published paths show to students.\n\n## Expected outcomes (what people get)\n- **Admin:** Can set up a full CRT training path without asking a developer to edit the database.\n- **Student:** Sees only published paths, with clear module names in order.\n\n## Done when\nAdmin creates “Campus Service Track” with at least 3 modules and publishes it; student can see it on CRT home."
+    },
+    {
+      "milestone": "CRT · Phase 1 — Learn & practice",
+      "title": "CRT: Admin can add MCQ questions with explanations",
+      "labels": ["team/crt", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nQuestion bank: add MCQs with options, correct answer, topic tag, difficulty, explanation.\n\n## Clear work\n1. Add / edit / delete questions.\n2. Attach questions to a module.\n3. Students must not see the correct answer while the test is running.\n\n## Expected outcomes (what people get)\n- **Admin:** Can build and fix CRT question papers themselves.\n- **Student:** Gets real practice questions; after submit they can learn from explanations.\n\n## Done when\nAt least 30 questions across 3 topics exist; student practice does not leak answers mid-test."
+    },
+    {
+      "milestone": "CRT · Phase 1 — Learn & practice",
+      "title": "CRT: Student can take a timed practice test and see score",
+      "labels": ["team/crt", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nTimed practice: start → answer MCQs → timer ends or submit → score page.\n\n## Clear work\n1. Timer and question navigator.\n2. Save answers (don’t lose on refresh if possible).\n3. After submit: score, correct/wrong, explanations.\n\n## Expected outcomes (what people get)\n- **Student:** Can practice like a real CRT section and immediately know how they did.\n- **Admin:** Can see that attempts are being recorded (for later reports).\n\n## Done when\nA student finishes one timed set and sees a clear score summary with explanations."
+    },
+    {
+      "milestone": "CRT · Phase 1 — Learn & practice",
+      "title": "CRT: Student CRT home shows progress and Continue",
+      "labels": ["team/crt", "role/frontend", "priority/P0"],
+      "body": "## What to build\nCRT home listing assigned paths, % complete, and a Continue button.\n\n## Expected outcomes (what people get)\n- **Student:** Opens CRT and instantly knows what to do next (not a blank page).\n- **Admin:** Students actually use the path that was assigned.\n\n## Done when\nHome shows path name, progress, and Continue into the next module/practice."
+    },
+    {
+      "milestone": "CRT · Phase 1 — Learn & practice",
+      "title": "CRT: Admin can import many questions from Excel/CSV",
+      "labels": ["team/crt", "role/backend", "priority/P1"],
+      "body": "## What to build\nUpload Excel/CSV using a fixed template; show which rows failed.\n\n## Expected outcomes (what people get)\n- **Admin:** Can load hundreds of CRT questions in minutes instead of typing one by one.\n- **Student:** Gets a larger practice bank faster.\n\n## Done when\nTemplate downloads; a sample file imports; error report shows bad rows."
+    },
+    {
+      "milestone": "CRT · Phase 2 — Mocks & readiness",
+      "title": "CRT: Student can take a full mock CRT (multi-section)",
+      "labels": ["team/crt", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nOne full mock that feels like a campus drive paper (sections + total time), then a section-wise report.\n\n## Expected outcomes (what people get)\n- **Student:** Can sit a full mock before the real placement test and see section scores (Aptitude / Reasoning / …).\n- **Admin:** Can configure the mock blueprint (counts/time) once and reuse it.\n\n## Done when\nStudent completes one full mock and sees section-wise results."
+    },
+    {
+      "milestone": "CRT · Phase 2 — Mocks & readiness",
+      "title": "CRT: Student sees a readiness score on CRT home",
+      "labels": ["team/crt", "role/backend", "role/frontend", "priority/P0"],
+      "body": "## What to build\nA simple 0–100 readiness score from recent practice + mocks (document the formula).\n\n## Expected outcomes (what people get)\n- **Student:** Knows “Am I placement-ready?” at a glance, not only last test marks.\n- **Admin / mentor:** Can sort students by readiness later.\n\n## Done when\nFormula is written in the issue/docs; score updates after a practice/mock; shown on CRT home."
+    },
+    {
+      "milestone": "CRT · Phase 2 — Mocks & readiness",
+      "title": "CRT: Student can open past attempts and review mistakes",
+      "labels": ["team/crt", "role/frontend", "priority/P1"],
+      "body": "## What to build\nHistory list of attempts; open one to review wrong answers + explanations.\n\n## Expected outcomes (what people get)\n- **Student:** Can revise weak questions after a test instead of forgetting them.\n- **Admin:** Students spend more time learning, not only attempting.\n\n## Done when\nFrom history, student opens an old attempt and sees review (not mid-test cheating)."
+    },
+    {
+      "milestone": "CRT · Phase 2 — Mocks & readiness",
+      "title": "CRT: Student sees topic strength/weakness (heatmap)",
+      "labels": ["team/crt", "role/frontend", "priority/P1"],
+      "body": "## What to build\nSimple topic bars/heatmap from attempts (e.g. Percentages weak, Blood relations strong).\n\n## Expected outcomes (what people get)\n- **Student:** Knows which topics to practice next.\n- **Mentor:** Can spot class-wide weak topics later.\n\n## Done when\nAfter a few attempts, CRT shows topic strengths clearly."
+    },
+    {
+      "milestone": "CRT · Phase 3 — Campus & packs",
+      "title": "CRT: Admin can assign a path to a college batch",
+      "labels": ["team/crt", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nPick a ULearn batch + a CRT path → assign. Students in that batch (with CRT access) see it.\n\n## Expected outcomes (what people get)\n- **Admin / campus staff:** Can roll out CRT to a whole batch in one action.\n- **Student:** Opens CRT and already has the path for their batch (no manual enroll chaos).\n\n## Done when\nAssign batch → student in batch sees path; student not in batch does not (unless assigned another way)."
+    },
+    {
+      "milestone": "CRT · Phase 3 — Campus & packs",
+      "title": "CRT: Admin can publish a company pack (e.g. TCS / Infosys)",
+      "labels": ["team/crt", "role/frontend", "role/backend", "priority/P1"],
+      "body": "## What to build\nCompany pack = name + linked questions/tips. Student opens pack and practices.\n\n## Expected outcomes (what people get)\n- **Admin:** Can prepare “this drive’s company” material quickly.\n- **Student:** Practices the pattern for a specific company, not only generic CRT.\n\n## Done when\nAt least one company pack is published and a student can practice from it."
+    },
+    {
+      "milestone": "CRT · Phase 3 — Campus & packs",
+      "title": "CRT: Admin can post CRT announcements / drive dates",
+      "labels": ["team/crt", "role/frontend", "priority/P1"],
+      "body": "## What to build\nCRT-only announcements list (and optional drive date).\n\n## Expected outcomes (what people get)\n- **Admin:** Tells CRT students about drives/classes without emailing everyone manually.\n- **Student with CRT access:** Sees placement/CRT notices in one place.\n- **Student without CRT:** Does not see these notices.\n\n## Done when\nAdmin posts one announcement; allowed CRT student sees it on CRT home."
+    },
+    {
+      "milestone": "CRT · Phase 4 — Mentors & polish",
+      "title": "CRT: Mentor can see who is inactive or low readiness",
+      "labels": ["team/crt", "role/frontend", "role/backend", "priority/P1"],
+      "body": "## What to build\nMentor/admin table: last practice date, readiness, batch filter; export CSV.\n\n## Expected outcomes (what people get)\n- **Mentor / admin:** Finds students who stopped practicing or are below the readiness cut-off.\n- **Student:** Gets help earlier because mentors can see them.\n\n## Done when\nMentor filters a batch and exports a CSV of at-risk students."
+    },
+    {
+      "milestone": "CRT · Phase 4 — Mentors & polish",
+      "title": "CRT: Mentor can assign a remedial module to selected students",
+      "labels": ["team/crt", "role/backend", "role/frontend", "priority/P1"],
+      "body": "## What to build\nFrom mentor dashboard, assign an extra module; student sees it on CRT home until done.\n\n## Expected outcomes (what people get)\n- **Mentor:** Can push weak students into extra practice without creating a whole new path.\n- **Student:** Sees a clear “Assigned for you” remedial item and can complete it.\n\n## Done when\nMentor assigns → student sees it → completion clears/updates status."
+    },
+    {
+      "milestone": "CRT · Phase 4 — Mentors & polish",
+      "title": "CRT: Admin analytics — usage funnel and bad questions",
+      "labels": ["team/crt", "role/frontend", "role/backend", "priority/P1"],
+      "body": "## What to build\nSimple analytics: how many started practice / finished / mock / ready; questions with very high fail rate.\n\n## Expected outcomes (what people get)\n- **Admin:** Knows if CRT is actually being used and which questions need fixing.\n- **Content author:** Improves weak questions.\n\n## Done when\nAdmin opens analytics and sees funnel numbers + a “fix these questions” list."
+    },
+    {
+      "milestone": "CRT · Phase 4 — Mentors & polish",
+      "title": "CRT: End-to-end QA demo for product owner",
+      "labels": ["team/crt", "role/shared", "priority/P0"],
+      "body": "## What to build\nA written demo script + checklist, then run it live once.\n\n## Expected outcomes (what people get)\n- **Product owner:** Sees admin assign batch → student practice → mock → readiness → mentor view in one sitting.\n- **Team:** Knows CRT Phase work is shippable.\n\n## Done when\nChecklist attached to this issue; demo completed; bugs filed as follow-ups."
+    },
+
+    {
+      "milestone": "Interview · Phase 0 — Setup",
+      "title": "Interview: Student with Allowed Interview can open Interview; others cannot",
+      "labels": ["team/interview", "role/shared", "priority/P0"],
+      "body": "## What to build\nSame access idea as CRT, for Interview.\n\n## Clear work\n1. `/interview` only with `interview.access`.\n2. Navbar link only when allowed.\n3. Note how admin grants **Allowed Interview** via Labels.\n\n## Expected outcomes (what people get)\n- **Admin:** Controls who may use AI mocks by label membership.\n- **Student with access:** Sees **Interview** and opens it.\n- **Student without access:** No Interview menu; cannot use `/interview`.\n\n## Done when\nAllowed vs not-allowed students behave as above in a demo."
+    },
+    {
+      "milestone": "Interview · Phase 0 — Setup",
+      "title": "Interview: Choose AI provider and write cost/safety rules",
+      "labels": ["team/interview", "role/backend", "priority/P0"],
+      "body": "## What to build\nA short decision doc: which AI API, approx cost per 30-min mock, secrets only on server, safety rules.\n\n## Expected outcomes (what people get)\n- **Admin / owner:** Knows rough monthly cost before students spam mocks.\n- **Team:** Builds without putting API keys in the browser.\n- **Student (later):** Gets stable mocks without leaking exam-style answers from the AI.\n\n## Done when\n`docs` note (or issue comment) has provider choice, cost estimate, and safety list."
+    },
+    {
+      "milestone": "Interview · Phase 0 — Setup",
+      "title": "Interview: Database for templates, sessions, turns, scores",
+      "labels": ["team/interview", "role/backend", "priority/P0"],
+      "body": "## What to build\nSupabase schema + RLS: interview templates, sessions, chat turns, scores. Seed HR + Technical templates.\n\n## Expected outcomes (what people get)\n- **Student:** Their interview chat and scores stay private to them (+ mentors/admins as designed).\n- **Admin:** Can add new interview types later without rebuilding everything.\n\n## Done when\nMigration applied; seed templates exist; student cannot read another student’s session."
+    },
+    {
+      "milestone": "Interview · Phase 0 — Setup",
+      "title": "Interview: Screen sketches for start, chat, and feedback",
+      "labels": ["team/interview", "role/frontend", "priority/P0"],
+      "body": "## What to build\nSketches for: pick interview type → live chat mock → scorecard/transcript.\n\n## Expected outcomes (what people get)\n- **Team / owner:** Agrees UX before AI work.\n- **Student (later):** Clear start → interview → feedback journey.\n\n## Done when\nSketches linked and approved on this issue."
+    },
+    {
+      "milestone": "Interview · Phase 1 — Text mock",
+      "title": "Interview: Student can pick an interview type and start a session",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nCatalog of interviews (HR, Technical, …) with duration; Start creates a session.\n\n## Expected outcomes (what people get)\n- **Student:** Chooses the kind of mock they need and starts in one click.\n- **Admin:** Controls which templates are available (publish/hide).\n\n## Done when\nStudent starts HR and Technical from the catalog; session appears in history as in progress/completed."
+    },
+    {
+      "milestone": "Interview · Phase 1 — Text mock",
+      "title": "Interview: Student can complete a text AI mock (Q&A loop)",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nChat interview: AI asks, student types answers, AI follow-ups, timer, end session. AI calls only from backend/edge function.\n\n## Expected outcomes (what people get)\n- **Student:** Experiences a real back-and-forth mock interview in the browser.\n- **Admin:** No API keys exposed; sessions are saved for feedback.\n\n## Done when\nStudent finishes one full text mock; all turns are stored; timer works."
+    },
+    {
+      "milestone": "Interview · Phase 1 — Text mock",
+      "title": "Interview: Weekly mock limit so students cannot overuse AI",
+      "labels": ["team/interview", "role/backend", "role/frontend", "priority/P0"],
+      "body": "## What to build\nDefault weekly quota (configurable). Block Start when used up with a clear message.\n\n## Expected outcomes (what people get)\n- **Admin / owner:** Controls AI cost; one student cannot burn the budget.\n- **Student:** Understands how many mocks they have left this week.\n\n## Done when\nAfter quota is used, Start is blocked with a friendly message; quota resets weekly (or documented rule)."
+    },
+    {
+      "milestone": "Interview · Phase 1 — Text mock",
+      "title": "Interview: Student can see past mocks in a history list",
+      "labels": ["team/interview", "role/frontend", "priority/P1"],
+      "body": "## What to build\nList of past sessions with date, type, status; open feedback when ready.\n\n## Expected outcomes (what people get)\n- **Student:** Finds older mocks and tracks improvement over time.\n- **Mentor (later):** Can open the same history for review.\n\n## Done when\nCompleted mocks show in history and open the feedback page."
+    },
+    {
+      "milestone": "Interview · Phase 2 — Scores & feedback",
+      "title": "Interview: After a mock, student gets a scorecard and transcript",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nPost-session scoring (competencies like clarity, depth, communication) + full transcript UI.\n\n## Expected outcomes (what people get)\n- **Student:** Knows overall score, strengths, and what to improve, with the full conversation to re-read.\n- **Admin:** Scoring version is stored so old results stay understandable when rubrics change.\n\n## Done when\nFinishing a mock shows scorecard + transcript within a short wait."
+    },
+    {
+      "milestone": "Interview · Phase 2 — Scores & feedback",
+      "title": "Interview: Admin can edit interviewer persona / prompts without code",
+      "labels": ["team/interview", "role/backend", "role/frontend", "priority/P0"],
+      "body": "## What to build\nSafe admin UI (or config) to edit persona text and prompts; sessions store which version was used.\n\n## Expected outcomes (what people get)\n- **Admin:** Can make the AI stricter/friendlier or more “HR-like” without a developer deploy.\n- **Student:** Gets consistent interviewer style for a published template.\n\n## Done when\nAdmin changes persona → new session uses new text; old session still shows old version id."
+    },
+    {
+      "milestone": "Interview · Phase 2 — Scores & feedback",
+      "title": "Interview: Student gets 3–5 next practice tips from weak areas",
+      "labels": ["team/interview", "role/frontend", "priority/P1"],
+      "body": "## What to build\nOn scorecard, show concrete tips (e.g. “Practice STAR stories”, “Explain trade-offs”).\n\n## Expected outcomes (what people get)\n- **Student:** Leaves the mock knowing what to do next, not only a number.\n- **CRT team (later):** Can deep-link tips to CRT topics if both products agree.\n\n## Done when\nEvery completed mock shows actionable tips tied to low competencies."
+    },
+    {
+      "milestone": "Interview · Phase 2 — Scores & feedback",
+      "title": "Interview: Student can redo the same mock and compare scores",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P1"],
+      "body": "## What to build\nRedo with same template; show before/after scores.\n\n## Expected outcomes (what people get)\n- **Student:** Measures improvement on the same interview style.\n- **Mentor:** Sees progress between attempts.\n\n## Done when\nStudent completes two linked attempts and sees a compare view."
+    },
+    {
+      "milestone": "Interview · Phase 3 — Voice & coding",
+      "title": "Interview: Student can do a voice mock (speak answers)",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P1"],
+      "body": "## What to build\nVoice mode: mic permission, speech-to-text answers, fallback to text if mic fails.\n\n## Expected outcomes (what people get)\n- **Student:** Practices speaking like a real interview, not only typing.\n- **Admin:** Cost/latency impact is documented; quota still applies.\n\n## Done when\nStudent completes one voice (or hybrid) mock; fallback to text works."
+    },
+    {
+      "milestone": "Interview · Phase 3 — Voice & coding",
+      "title": "Interview: Technical mock includes a coding question with editor",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P1"],
+      "body": "## What to build\nIn technical interviews, show a coding problem + editor + public tests; save code and result into the session score.\n\n## Expected outcomes (what people get)\n- **Student:** Practices coding under interview pressure inside the same mock.\n- **Admin:** Can attach coding problems to the Technical template.\n\n## Done when\nStudent runs tests during a technical mock; scorecard includes coding performance."
+    },
+    {
+      "milestone": "Interview · Phase 3 — Voice & coding",
+      "title": "Interview: Optional resume upload makes questions about the student’s projects",
+      "labels": ["team/interview", "role/backend", "role/frontend", "priority/P1"],
+      "body": "## What to build\nPaste/upload resume text; AI asks at least two project-specific questions.\n\n## Expected outcomes (what people get)\n- **Student:** Mock feels personal to their resume, closer to real interviews.\n- **Admin:** Privacy note shown; resume data retention rule documented.\n\n## Done when\nWith a sample resume, session includes resume-based questions."
+    },
+    {
+      "milestone": "Interview · Phase 4 — Mentors & polish",
+      "title": "Interview: Mentor can review a mock and override the AI score",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P1"],
+      "body": "## What to build\nMentor list of completed sessions; open transcript; change score with a required reason; keep history of changes.\n\n## Expected outcomes (what people get)\n- **Mentor:** Corrects unfair AI scores and coaches with context.\n- **Student:** Sees final mentor-adjusted feedback when enabled.\n- **Admin:** Audit trail of who changed scores.\n\n## Done when\nMentor overrides one score with a reason; history shows old vs new."
+    },
+    {
+      "milestone": "Interview · Phase 4 — Mentors & polish",
+      "title": "Interview: Admin can see usage and estimated AI cost by college/batch",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P1"],
+      "body": "## What to build\nSimple dashboard: sessions started/completed, average score, estimated cost.\n\n## Expected outcomes (what people get)\n- **Admin / owner:** Knows which colleges use Interview and what it costs.\n- **Campus staff:** Can justify quotas or training push.\n\n## Done when\nAdmin opens dashboard and exports a CSV for one college/batch filter."
+    },
+    {
+      "milestone": "Interview · Phase 4 — Mentors & polish",
+      "title": "Interview: Clear errors when AI fails; session does not lose the chat so far",
+      "labels": ["team/interview", "role/frontend", "role/backend", "priority/P0"],
+      "body": "## What to build\nRetries, friendly error messages, mark session failed without wiping transcript.\n\n## Expected outcomes (what people get)\n- **Student:** If AI is down, they understand what happened and don’t lose everything typed.\n- **Admin:** Fewer “mock disappeared” support complaints.\n\n## Done when\nForced failure demo still shows prior turns and a clear error state."
+    },
+    {
+      "milestone": "Interview · Phase 4 — Mentors & polish",
+      "title": "Interview: End-to-end QA demo for product owner",
+      "labels": ["team/interview", "role/shared", "priority/P0"],
+      "body": "## What to build\nDemo script: grant Allowed Interview → start HR mock → finish → scorecard → mentor override (if ready).\n\n## Expected outcomes (what people get)\n- **Product owner:** Sees the full Interview value in one sitting.\n- **Team:** Confirms Phase work is demo-ready.\n\n## Done when\nChecklist on this issue; demo done; leftover bugs filed."
+    }
+  ]
+}
