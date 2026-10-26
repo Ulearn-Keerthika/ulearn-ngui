@@ -127,6 +127,7 @@ History ----------------> Catalog
 - **Quota exhausted:** Disable Start; show when quota resets and link to History.
 - **Access denied:** User lacks `interview.access`.
 - **Error:** Network or server error with retry.
+- **Session creation failure:** If creating a session fails after the student clicks **Start**, remain on the Catalog, show a friendly error message, and provide a **Retry** option. On retry, reuse the same client request idempotency key (or server-side deduplication) so a successful retry does not create duplicate sessions.
 
 ### Data requirements
 
@@ -185,7 +186,8 @@ Interview templates (id, title, description, duration_minutes, type slug), stude
 
 - **Loading session:** Fetch existing turns for resume.
 - **AI thinking:** Disable Send; show typing indicator.
-- **AI error / timeout:** User-friendly message; **Retry** same turn (idempotent `client_turn_id` per `AI_PROVIDER.md`).
+- **Message submission failure:** If submitting an answer fails, **preserve the student's typed answer** in the composer, show a clear error and **Retry** option, and reuse the same **`client_turn_id`** (per `AI_PROVIDER.md`) so retries do not create duplicate student turns.
+- **AI error / timeout:** After a student turn is saved, if the AI reply fails or times out, show a user-friendly message and **Retry** for the AI response using the same **`client_turn_id`** idempotency approach (no duplicate turns).
 - **Timer expired:** Auto-end or block new sends â€” PO decision.
 - **Session failed:** Explain failure; offer return to Catalog or History with partial transcript saved (INT-060).
 
@@ -258,9 +260,9 @@ Session id, template id, `started_at`, `ends_at` or duration, turn list (id, rol
 
 ### States
 
-- **Scoring in progress:** Spinner â€” â€œGenerating your feedbackâ€¦â€
-- **Scoring failed:** Show transcript; explain score unavailable; support contact.
-- **Partial data:** Competencies missing â€” show available fields only.
+- **Feedback pending** (evaluation / scoring in progress): Evaluation is still running. Show a loading indicator and a message such as â€œGenerating your feedbackâ€¦â€ Hide or placeholder competency blocks until results arrive.
+- **Feedback unavailable** (evaluation / scoring failed): Evaluation failed or feedback **cannot be retrieved**. Explain that the **score is currently unavailable**, keep the **transcript visible when available**, and offer **Retry** (reload evaluation) and/or **contact support** where appropriate. Do not imply a score exists when it does not.
+- **Partial data:** Some competency or summary fields are missing while evaluation otherwise succeeded â€” show available fields only. Keep this state **separate** from **Feedback pending** (still running) and **Feedback unavailable** (failed or not retrievable).
 
 ### Data requirements
 
