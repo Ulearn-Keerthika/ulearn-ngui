@@ -17,6 +17,10 @@ export const adminRoutes: Routes = [
     children: [
       gated('dashboard', 'dashboard.view', () =>
         import('./dashboard/dashboard').then(m => m.Dashboard)),
+      gated('crt', 'dashboard.view', () =>
+        import('./crt/crt').then(m => m.AdminCrt)),
+      gated('interview', 'dashboard.view', () =>
+        import('./interview/interview').then(m => m.AdminInterview)),
       gated('courses', 'courses.manage', () =>
         import('./courses-management/courses-management').then(m => m.CoursesManagement)),
       gated('curriculum', 'curriculum.manage', () =>
