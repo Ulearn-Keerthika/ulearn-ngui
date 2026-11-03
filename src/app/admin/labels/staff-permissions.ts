@@ -48,6 +48,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Coupons', path: '/admin/coupons', icon: '🏷️', permission: 'coupons.manage' },
   { label: 'Students', path: '/admin/students', icon: '👥', permission: 'students.manage' },
   { label: 'Batches', path: '/admin/batches', icon: '📅', permission: 'batches.manage' },
+  { label: 'CRT', path: '/admin/crt/paths', icon: '🧠', permission: 'crt.access' },
   { label: 'Sessions', path: '/admin/sessions', icon: '🎥', permission: 'sessions.manage' },
   { label: 'Exam portal', path: '/admin/exam-portal', icon: '📝', permission: 'exams.manage' },
   { label: 'Mentors', path: '/admin/mentors', icon: '🧑‍🏫', permission: 'mentors.manage' },
