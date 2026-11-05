@@ -1,11 +1,14 @@
 import { Injectable } from '@angular/core';
 import { supabase } from '../core/supabase.client';
 import {
+  InterviewHistoryItem,
   InterviewSessionStatus,
   InterviewSessionSummary,
   InterviewTemplate,
   InterviewTemplateKind,
 } from '../models';
+
+const HISTORY_LIST_LIMIT = 50;
 
 const TEMPLATE_KINDS: readonly InterviewTemplateKind[] = ['hr', 'technical', 'domain'];
 const SESSION_STATUSES: readonly InterviewSessionStatus[] = ['in_progress', 'completed', 'failed'];
@@ -26,6 +29,15 @@ interface SessionRow {
   template_id: string;
   prompt_version: string;
   interview_templates: { title: string; kind: string } | { title: string; kind: string }[] | null;
+}
+
+interface HistorySessionRow {
+  id: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  overall_score: number | null;
+  interview_templates: { title: string } | { title: string }[] | null;
 }
 
 /**
@@ -87,6 +99,14 @@ function embeddedTemplate(
   return row;
 }
 
+function embeddedTemplateTitle(
+  value: HistorySessionRow['interview_templates']
+): string | null {
+  const row = Array.isArray(value) ? value[0] : value;
+  if (!row || typeof row.title !== 'string') return null;
+  return row.title;
+}
+
 @Injectable({ providedIn: 'root' })
 export class InterviewCatalogService {
   /** Published templates only. Drafts are excluded here and by RLS. */
@@ -143,6 +163,44 @@ export class InterviewCatalogService {
       throw new Error('The interview session was not created.');
     }
     return data['id'];
+  }
+
+  /**
+   * List the signed-in student's sessions (newest first). Ownership enforced by RLS.
+   */
+  async listOwnSessions(): Promise<InterviewHistoryItem[]> {
+    const { data, error } = await supabase
+      .from('interview_sessions')
+      .select('id, status, started_at, ended_at, overall_score, interview_templates(title)')
+      .order('started_at', { ascending: false })
+      .limit(HISTORY_LIST_LIMIT);
+
+    if (error) throw error;
+
+    const items: InterviewHistoryItem[] = [];
+    for (const raw of data ?? []) {
+      const row = raw as unknown as HistorySessionRow;
+      if (typeof row.id !== 'string' || typeof row.status !== 'string') continue;
+      if (!isSessionStatus(row.status)) continue;
+      if (typeof row.started_at !== 'string') continue;
+
+      const template = embeddedTemplateTitle(row.interview_templates);
+      const score =
+        typeof row.overall_score === 'number' && Number.isFinite(row.overall_score)
+          ? row.overall_score
+          : null;
+      const endedAt = typeof row.ended_at === 'string' ? row.ended_at : null;
+
+      items.push({
+        id: row.id,
+        templateTitle: template ?? 'Interview session',
+        status: row.status,
+        startedAt: row.started_at,
+        endedAt,
+        overallScore: score,
+      });
+    }
+    return items;
   }
 
   async getOwnSession(sessionId: string): Promise<InterviewSessionSummary | null> {
