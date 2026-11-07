@@ -3,18 +3,29 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  NgZone,
   computed,
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
-import { InterviewSessionSummary, InterviewTurn } from '../models';
+import { InterviewTurn } from '../models';
 import { InterviewRequestError } from './interview-api';
-import { InterviewCatalogService, interviewErrorMessage } from './interview-catalog.service';
+import {
+  InterviewCodingPublicTestResult,
+  InterviewCodingProblem,
+} from './interview-coding';
+import {
+  InterviewCatalogService,
+  InterviewSessionDetails,
+  interviewErrorMessage,
+} from './interview-catalog.service';
+import { InterviewSessionCoding } from './interview-session-coding';
 import {
   INTERVIEW_LOW_TIME_MS,
   formatInterviewClock,
@@ -23,6 +34,16 @@ import {
   interviewRemainingMs,
   shouldAutoFinishSession,
 } from './interview-timer';
+import {
+  InterviewInputMode,
+  InterviewVoiceController,
+  QuestionSpeaker,
+  VOICE_UNAVAILABLE_MESSAGE,
+  browserSpeechHost,
+  createQuestionSpeaker,
+  recognitionMayStart,
+  recognizedAnswerText,
+} from './interview-voice';
 
 type SubmitNotice = 'retry' | 'ai' | 'connection';
 
@@ -37,7 +58,7 @@ const AI_FAILURE_CODES = new Set([
   selector: 'app-interview-session',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, InterviewSessionCoding],
   template: `
     <div class="session-page">
       @if (loading() && !session()) {
@@ -70,7 +91,15 @@ const AI_FAILURE_CODES = new Set([
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
             Interview Catalog
           </a>
-          <p class="mode">Text interview</p>
+          <div class="mode-group">
+            <p class="mode">{{ current.status === 'in_progress' && inputMode() === 'voice' ? 'Voice interview' : 'Text interview' }}</p>
+            @if (current.status === 'in_progress') {
+              <div class="mode-switch" role="group" aria-label="Answer input mode">
+                <button type="button" [attr.aria-pressed]="inputMode() === 'text'" (click)="setInputMode('text')">Text</button>
+                <button type="button" [attr.aria-pressed]="inputMode() === 'voice'" (click)="setInputMode('voice')">Voice</button>
+              </div>
+            }
+          </div>
         </div>
 
         @if (current.status === 'completed' || current.status === 'failed') {
@@ -140,7 +169,12 @@ const AI_FAILURE_CODES = new Set([
                 </div>
               </div>
             }
-            <a class="primary wide" routerLink="/interview">Back to Interview Catalog</a>
+            @if (current.status === 'completed') {
+              <a class="primary wide" [routerLink]="['/interview/session', current.id, 'result']">View results</a>
+              <a class="secondary wide" routerLink="/interview">Back to Interview Catalog</a>
+            } @else {
+              <a class="primary wide" routerLink="/interview">Back to Interview Catalog</a>
+            }
             @if (draft()) {
               <label class="field-label" for="unsent-answer">Unsent answer</label>
               <textarea id="unsent-answer" [value]="draft()" readonly rows="4"></textarea>
@@ -167,6 +201,19 @@ const AI_FAILURE_CODES = new Set([
               </button>
             </div>
           </div>
+
+          @if (codingProblem(); as coding) {
+            <app-interview-session-coding
+              [sessionId]="current.id"
+              [problem]="coding"
+              [editable]="canUseCoding()"
+              [initialCode]="savedCodingCode()"
+              [initialLanguage]="savedCodingLanguage()"
+              [initialResults]="savedCodingResults()"
+              [initialPassedCount]="savedCodingPassed()"
+              [initialTotalCount]="savedCodingTotal()"
+            />
+          }
 
           <section class="surface">
             <div #transcript class="conversation" role="log" aria-relevant="additions" aria-label="Interview conversation">
@@ -300,11 +347,57 @@ const AI_FAILURE_CODES = new Set([
                     } @else if (restored()) {
                       Continue where you left off.
                     } @else if (submitNotice() === 'retry' || submitNotice() === 'ai') {
+                    } @else if (inputMode() === 'voice' && recording()) {
+                      Listening. Recognized phrases are added to the answer box. Send when you are ready.
+                    } @else if (inputMode() === 'voice') {
+                      Review the recognized answer, edit it if needed, then send.
                     } @else {
                       Be specific. A real example works best.
                     }
                   </p>
                 </div>
+                @if (inputMode() === 'voice') {
+                  <div class="voice-panel">
+                    @if (!speechSupported()) {
+                      <p class="voice-note" role="status">{{ voiceUnavailableMessage }}</p>
+                    } @else {
+                      <div class="voice-controls">
+                        <button
+                          type="button"
+                          class="mic"
+                          [class.live]="recording()"
+                          (click)="toggleRecording()"
+                          [attr.aria-pressed]="recording()"
+                          [disabled]="sending() || reconnecting() || ending()"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3"/></svg>
+                          {{ recording() ? 'Stop recording' : 'Start recording' }}
+                        </button>
+                        <p class="rec-status" [class.live]="recording()" role="status" aria-live="polite">
+                          <span class="rec-dot" aria-hidden="true"></span>
+                          {{ recording() ? 'Recording' : 'Microphone idle' }}
+                        </p>
+                      </div>
+                      @if (interimTranscript()) {
+                        <p class="interim" role="status">Hearing: {{ interimTranscript() }}</p>
+                      }
+                      @if (voiceNotice()) {
+                        <p class="voice-note" role="status">{{ voiceNotice() }}</p>
+                      }
+                    }
+                    @if (ttsSupported()) {
+                      <button
+                        type="button"
+                        class="quiet"
+                        (click)="toggleQuestionSpeech()"
+                        [disabled]="!latestAssistant()"
+                        [attr.aria-pressed]="speakingQuestion()"
+                      >
+                        {{ speakingQuestion() ? 'Stop reading' : 'Read question aloud' }}
+                      </button>
+                    }
+                  </div>
+                }
                 <textarea
                   id="interview-answer"
                   rows="4"
@@ -315,7 +408,7 @@ const AI_FAILURE_CODES = new Set([
                   [readOnly]="sending()"
                   [disabled]="reconnecting()"
                   [attr.aria-invalid]="submitNotice() === 'retry' || submitNotice() === 'ai' ? true : null"
-                  [placeholder]="sending() && answerAlreadyStored() ? 'Waiting for the AI interviewer…' : 'Type your answer here. Share the situation, your actions, and what you learned.'"
+                  [placeholder]="sending() && answerAlreadyStored() ? 'Waiting for the AI interviewer…' : inputMode() === 'voice' ? 'Your spoken answer appears here. You can edit it before sending.' : 'Type your answer here. Share the situation, your actions, and what you learned.'"
                 ></textarea>
                 <div class="composer-actions" [class.stack]="submitNotice() === 'retry' || submitNotice() === 'ai'">
                   @if (submitNotice() !== 'retry' && submitNotice() !== 'ai') {
@@ -349,7 +442,7 @@ const AI_FAILURE_CODES = new Set([
                 <svg viewBox="0 0 24 24"><path d="M5 21V4h9l1 3h5v10h-6l-1-3H7v7"/></svg>
               </span>
               <h2 id="end-title">End this interview?</h2>
-              <p>Ending will complete your current session. You won't be able to send any more answers in this interview.</p>
+              <p>Ending will complete your current session and open your results. You won't be able to send any more answers in this interview.</p>
               <button type="button" class="primary wide" (click)="confirmEndNow()" [disabled]="ending()">
                 {{ ending() ? 'Ending…' : 'End Interview' }}
               </button>
@@ -573,6 +666,53 @@ const AI_FAILURE_CODES = new Set([
     }
     .dialog .symbol { width: 44px; height: 44px; margin-bottom: 24px; color: var(--purple); background: #f3eff9; }
     .dialog p { margin: 12px 0 24px; color: #626277; font-weight: 700; line-height: 1.6; }
+    .mode-group { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+    .mode-switch { display: flex; gap: 8px; }
+    .mode-switch button {
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--navy);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .mode-switch button[aria-pressed='true'] { border-color: #65469b; background: #65469b; color: #fff; }
+    .voice-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 12px; }
+    .voice-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .mic {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 48px;
+      padding: 0 16px;
+      border: 2px solid #65469b;
+      border-radius: 12px;
+      background: #fff;
+      color: #65469b;
+    }
+    .mic.live { background: #fdecec; border-color: #c23b3b; color: #8d2f2f; }
+    .mic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .rec-status { display: flex; align-items: center; gap: 8px; margin: 0; color: #626277; font-size: 13px; font-weight: 800; }
+    .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #c9c9d4; }
+    .rec-status.live .rec-dot { background: #c23b3b; animation: rec-pulse 1.2s ease-in-out infinite; }
+    .interim { margin: 0; color: #626277; font-size: 14px; font-weight: 700; }
+    .voice-note {
+      margin: 0;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: #fff6df;
+      color: #8a5a00;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    @keyframes rec-pulse { 50% { opacity: 0.35; } }
+    @media (prefers-reduced-motion: reduce) {
+      .rec-dot { animation: none; }
+    }
     @media (max-width: 720px) {
       .session-page { padding: 20px 16px 48px; }
       .context, .title-row, .controls, .composer-head, .composer-actions { align-items: stretch; flex-direction: column; }
@@ -581,14 +721,21 @@ const AI_FAILURE_CODES = new Set([
       .conversation { padding: 20px 16px; }
       .turn.student { margin-left: 0; }
       .outcome { padding: 32px 20px; }
+      .mode-switch, .voice-controls, .mic { width: 100%; }
+      .mode-switch button { flex: 1; }
+      .mic { justify-content: center; }
     }
   `,
 })
 export class InterviewSession {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly catalog = inject(InterviewCatalogService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly zone = inject(NgZone);
   private readonly transcript = viewChild<ElementRef<HTMLElement>>('transcript');
+  private voice!: InterviewVoiceController;
+  private speaker!: QuestionSpeaker;
 
   private readonly sessionId = toSignal(
     this.route.paramMap.pipe(map((params) => params.get('id') ?? '')),
@@ -599,9 +746,17 @@ export class InterviewSession {
   readonly error = signal<string | null>(null);
   readonly submitError = signal<string | null>(null);
   readonly submitNotice = signal<SubmitNotice | null>(null);
-  readonly session = signal<InterviewSessionSummary | null>(null);
+  readonly session = signal<InterviewSessionDetails | null>(null);
   readonly turns = signal<InterviewTurn[]>([]);
   readonly draft = signal('');
+  readonly inputMode = signal<InterviewInputMode>('text');
+  readonly recording = signal(false);
+  readonly voiceNotice = signal<string | null>(null);
+  readonly interimTranscript = signal('');
+  readonly speechSupported = signal(false);
+  readonly ttsSupported = signal(false);
+  readonly speakingQuestion = signal(false);
+  readonly voiceUnavailableMessage = VOICE_UNAVAILABLE_MESSAGE;
   readonly sending = signal(false);
   readonly ending = signal(false);
   readonly expiring = signal(false);
@@ -610,6 +765,12 @@ export class InterviewSession {
   readonly reconnecting = signal(false);
   readonly restored = signal(false);
   readonly inflightAnswer = signal<string | null>(null);
+  readonly codingProblem = signal<InterviewCodingProblem | null>(null);
+  readonly savedCodingCode = signal<string | null>(null);
+  readonly savedCodingLanguage = signal<string | null>(null);
+  readonly savedCodingResults = signal<InterviewCodingPublicTestResult[]>([]);
+  readonly savedCodingPassed = signal<number | null>(null);
+  readonly savedCodingTotal = signal<number | null>(null);
   private readonly nowMs = signal(Date.now());
   private readonly clockOffsetMs = signal(0);
 
@@ -643,6 +804,10 @@ export class InterviewSession {
     const current = this.session();
     return current?.status === 'in_progress' && this.remainingMs() === 0;
   });
+
+  readonly canUseCoding = computed(
+    () => this.session()?.status === 'in_progress' && !this.timeUp() && !this.ending()
+  );
 
   readonly timerLabel = computed(() => {
     const current = this.session();
@@ -684,9 +849,38 @@ export class InterviewSession {
     return 'In progress';
   });
 
+  readonly latestAssistant = computed(() => {
+    const turns = this.turns();
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      const turn = turns[index];
+      if (turn?.role === 'assistant') return turn;
+    }
+    return null;
+  });
+
   constructor() {
+    const run = (work: () => void): void => {
+      this.zone.run(work);
+    };
+    this.voice = new InterviewVoiceController(browserSpeechHost(), () => this.draft(), {
+      onAnswerText: (text) => run(() => {
+        if (this.sending()) return;
+        this.draft.set(text);
+        this.restored.set(false);
+      }),
+      onRecordingChange: (recording) => run(() => this.recording.set(recording)),
+      onNotice: (message) => run(() => this.voiceNotice.set(message)),
+      onInterim: (preview) => run(() => this.interimTranscript.set(preview)),
+    });
+    this.speaker = createQuestionSpeaker((speaking) => run(() => this.speakingQuestion.set(speaking)));
+    this.speechSupported.set(this.voice.supported);
+    this.ttsSupported.set(this.speaker.supported);
+
     const timer = setInterval(() => this.nowMs.set(Date.now()), 1000);
-    this.destroyRef.onDestroy(() => clearInterval(timer));
+    this.destroyRef.onDestroy(() => {
+      clearInterval(timer);
+      this.stopVoiceActivity();
+    });
 
     effect(() => {
       const id = this.sessionId();
@@ -697,9 +891,21 @@ export class InterviewSession {
       const current = this.session();
       const remaining = this.remainingMs();
       if (!current || !shouldAutoFinishSession(current.status, remaining)) return;
+      untracked(() => this.stopVoiceActivity());
       if (this.finishRequestedFor === current.id || this.expiring()) return;
       this.finishRequestedFor = current.id;
       void this.finishBecauseTimeIsUp(current.id);
+    });
+
+    effect(() => {
+      const status = this.session()?.status;
+      if (!status || status === 'in_progress') return;
+      untracked(() => this.stopVoiceActivity());
+    });
+
+    effect(() => {
+      const questionId = this.latestAssistant()?.id ?? null;
+      untracked(() => this.speaker.noteQuestion(questionId));
     });
 
     effect(() => {
@@ -743,6 +949,43 @@ export class InterviewSession {
     this.restored.set(false);
   }
 
+  setInputMode(mode: InterviewInputMode): void {
+    if (this.inputMode() === mode) return;
+    this.inputMode.set(mode);
+    this.voice.setMode(mode);
+    if (mode === 'text') {
+      this.speaker.cancel();
+      if (this.interimTranscript()) this.interimTranscript.set('');
+    }
+  }
+
+  toggleRecording(): void {
+    if (!recognitionMayStart({
+      mode: this.inputMode(),
+      reconnecting: this.reconnecting(),
+      sending: this.sending(),
+      ending: this.ending(),
+      expiring: this.expiring(),
+    })) return;
+    if (this.recording()) {
+      this.voice.stop();
+      return;
+    }
+    this.speaker.cancel();
+    this.voice.start();
+  }
+
+  toggleQuestionSpeech(): void {
+    if (this.inputMode() !== 'voice' || !this.speaker.supported) return;
+    if (this.speakingQuestion()) {
+      this.speaker.cancel();
+      return;
+    }
+    const turn = this.latestAssistant();
+    if (!turn) return;
+    this.speaker.speak(turn.id, turn.content);
+  }
+
   onAnswerKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
     event.preventDefault();
@@ -765,6 +1008,8 @@ export class InterviewSession {
     if (!current || this.reconnecting()) return;
     this.reconnecting.set(true);
     this.confirmOpen.set(false);
+    this.voice.abandon();
+    this.speaker.cancel();
     try {
       await this.load(current.id, true);
       if (!this.error()) {
@@ -785,7 +1030,7 @@ export class InterviewSession {
   async onSubmit(event?: Event): Promise<void> {
     event?.preventDefault();
     const current = this.session();
-    const answer = this.draft().trim();
+    const answer = recognizedAnswerText(this.draft());
     if (!current || this.sending() || this.ending() || this.reconnecting()) return;
     if (!answer) {
       this.submitNotice.set('retry');
@@ -794,6 +1039,8 @@ export class InterviewSession {
     }
     if (!this.canSend()) return;
 
+    this.voice.abandon();
+    if (this.interimTranscript()) this.interimTranscript.set('');
     this.clientTurnId ??= crypto.randomUUID();
     const clientTurnId = this.clientTurnId;
     this.inflightAnswer.set(answer);
@@ -836,12 +1083,15 @@ export class InterviewSession {
     if (this.expiring()) return;
     this.expiring.set(true);
     this.confirmOpen.set(false);
+    this.stopVoiceActivity();
     try {
       const result = await this.catalog.finishOwnSession(sessionId, 'expired');
       if (this.session()?.id !== sessionId) return;
       if (result.session?.status === 'completed') {
         this.session.set(result.session);
         this.expireError.set(null);
+        void this.catalog.requestEvaluation(sessionId).catch(() => undefined);
+        await this.router.navigate(['/interview/session', sessionId, 'result']);
         return;
       }
       if (!result.timeUp && result.serverNow) {
@@ -884,18 +1134,25 @@ export class InterviewSession {
     const current = this.session();
     if (!current || current.status !== 'in_progress' || this.ending() || this.sending()) return;
     this.ending.set(true);
+    this.stopVoiceActivity();
     this.submitError.set(null);
     this.submitNotice.set(null);
+    let completed = false;
     try {
       const updated = await this.catalog.completeOwnSession(current.id);
       if (updated.status !== 'completed') {
         throw new Error('This interview could not be ended.');
       }
+      completed = true;
       this.session.set(updated);
       this.confirmOpen.set(false);
+      void this.catalog.requestEvaluation(updated.id).catch(() => undefined);
+      await this.router.navigate(['/interview/session', updated.id, 'result']);
     } catch (error: unknown) {
-      this.submitError.set(interviewErrorMessage(error, 'This interview could not be ended.'));
-      this.confirmOpen.set(false);
+      if (!completed) {
+        this.submitError.set(interviewErrorMessage(error, 'This interview could not be ended.'));
+        this.confirmOpen.set(false);
+      }
     } finally {
       this.ending.set(false);
     }
@@ -947,6 +1204,11 @@ export class InterviewSession {
       this.expireError.set(null);
       this.confirmOpen.set(false);
       this.restored.set(false);
+      this.inputMode.set('text');
+      this.voice.setMode('text');
+      this.speaker.cancel();
+      this.voiceNotice.set(null);
+      if (this.interimTranscript()) this.interimTranscript.set('');
     }
     if (!quiet) this.loading.set(true);
     this.error.set(null);
@@ -972,6 +1234,31 @@ export class InterviewSession {
       if (request !== this.loadSeq) return;
       this.session.set(session);
       this.turns.set(turns);
+      this.codingProblem.set(session.codingProblem);
+      try {
+        const saved = await this.catalog.getSessionCoding(sessionId);
+        if (request !== this.loadSeq) return;
+        if (saved) {
+          this.savedCodingCode.set(saved.code);
+          this.savedCodingLanguage.set(saved.language);
+          this.savedCodingResults.set(saved.results);
+          this.savedCodingPassed.set(saved.passedCount);
+          this.savedCodingTotal.set(saved.totalCount);
+        } else {
+          this.savedCodingCode.set(null);
+          this.savedCodingLanguage.set(null);
+          this.savedCodingResults.set([]);
+          this.savedCodingPassed.set(null);
+          this.savedCodingTotal.set(null);
+        }
+      } catch {
+        // Coding table may not exist until migration is applied; chat still works.
+        this.savedCodingCode.set(null);
+        this.savedCodingLanguage.set(null);
+        this.savedCodingResults.set([]);
+        this.savedCodingPassed.set(null);
+        this.savedCodingTotal.set(null);
+      }
     } catch (error: unknown) {
       if (request !== this.loadSeq) return;
       if (!preserveDraft) {
@@ -991,6 +1278,12 @@ export class InterviewSession {
       this.submitNotice.set('retry');
       this.submitError.set('Could not refresh the conversation. Your answer is still in the box and was not confirmed as saved.');
     }
+  }
+
+  private stopVoiceActivity(): void {
+    this.voice.abandon();
+    this.speaker.cancel();
+    if (this.interimTranscript()) this.interimTranscript.set('');
   }
 
   private mergeTurns(incoming: InterviewTurn[]): void {

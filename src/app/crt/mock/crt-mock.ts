@@ -2,13 +2,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  OnDestroy,
   OnInit,
   computed,
   signal,
 } from '@angular/core';
-
 import { DecimalPipe } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
   import {
     CrtMockQuestion,
     CrtMockService,
@@ -107,8 +107,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
       if (
         !question ||
         this.isSubmitting() ||
-        index < 0 ||
-        index > 3
+        (index !== 0 && index !== 1 && index !== 2 && index !== 3)
       ) {
         return;
       }
@@ -126,6 +125,15 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
       questionId: string,
       selectedIndex: 0 | 1 | 2 | 3
     ): Promise<void> {
+      if (
+        selectedIndex !== 0 &&
+        selectedIndex !== 1 &&
+        selectedIndex !== 2 &&
+        selectedIndex !== 3
+      ) {
+        return;
+      }
+
       const savePromise = this.mockService
         .saveAnswer(this.attemptId, questionId, selectedIndex)
         .then(() => {

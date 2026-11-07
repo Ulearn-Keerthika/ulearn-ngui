@@ -773,6 +773,7 @@ export interface InterviewSessionSummary {
   templateTitle: string;
   templateKind: InterviewTemplateKind;
   promptVersion: string;
+  templateVersionId?: string | null;
   startedAt: string;
   endedAt: string | null;
   durationMinutes: number;
@@ -785,6 +786,33 @@ export interface InterviewTurn {
   content: string;
   seq: number;
   createdAt: string;
+}
+
+export type InterviewEvaluationStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+/** One competency row from interview_scores. feedback is the rationale column. */
+export interface InterviewCompetencyScore {
+  id: string;
+  competency: string;
+  score: number;
+  feedback: string;
+  evidence: string;
+  evalVersion: string;
+}
+
+/** Saved evaluation and transcript for the signed-in student's session. */
+export interface InterviewEvaluationSnapshot {
+  session: InterviewSessionSummary;
+  evaluationStatus: InterviewEvaluationStatus | null;
+  evalVersion: string | null;
+  overallScore: number | null;
+  summary: string | null;
+  strengths: string[];
+  improvements: string[];
+  evaluatedAt: string | null;
+  claimedAt: string | null;
+  competencies: InterviewCompetencyScore[];
+  turns: InterviewTurn[];
 }
 
 /** Student history list row (INT-002 session + template title). */

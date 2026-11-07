@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { invokeAuthedFunction, supabase } from '../core/supabase.client';
 import {
+  InterviewEvaluationSnapshot,
   InterviewHistoryItem,
   InterviewSessionStatus,
   InterviewSessionSummary,
@@ -15,6 +16,18 @@ import {
   parseInterviewTurnResponse,
   type InterviewTurnResponse,
 } from './interview-api';
+import {
+  InterviewCodingProblem,
+  InterviewCodingPublicTestResult,
+  InterviewSessionCodingResult,
+  activeInterviewCodingProblem,
+  parseInterviewSessionCodingRow,
+} from './interview-coding';
+import {
+  parseEvaluationSnapshot,
+  parseInterviewEvaluationResponse,
+  type InterviewEvaluationResponse,
+} from './interview-evaluation';
 import { formatTemplateVersionNumber } from './interview-prompt-version';
 import { positiveDurationMinutes } from './interview-timer';
 
@@ -33,6 +46,13 @@ interface TemplateRow {
   created_at: string;
 }
 
+interface SessionEmbeddedTemplate {
+  title: string;
+  kind: string;
+  duration_minutes: number | string;
+  coding_json?: unknown;
+}
+
 interface SessionRow {
   id: string;
   status: string;
@@ -41,14 +61,12 @@ interface SessionRow {
   started_at: string;
   ended_at?: string | null;
   template_version_id?: string | null;
-  interview_templates:
-    | { title: string; kind: string; duration_minutes: number | string }
-    | { title: string; kind: string; duration_minutes: number | string }[]
-    | null;
-  interview_template_versions?:
-    | { title: string; kind: string; duration_minutes: number | string }
-    | { title: string; kind: string; duration_minutes: number | string }[]
-    | null;
+  interview_templates: SessionEmbeddedTemplate | SessionEmbeddedTemplate[] | null;
+  interview_template_versions?: SessionEmbeddedTemplate | SessionEmbeddedTemplate[] | null;
+}
+
+export interface InterviewSessionDetails extends InterviewSessionSummary {
+  codingProblem: InterviewCodingProblem | null;
 }
 
 interface HistorySessionRow {
@@ -116,13 +134,18 @@ function embeddedTemplate(
     | SessionRow['interview_templates']
     | SessionRow['interview_template_versions']
     | undefined
-): { title: string; kind: string; duration_minutes: number } | null {
+): { title: string; kind: string; duration_minutes: number; coding_json?: unknown } | null {
   const row = Array.isArray(value) ? value[0] : value;
   const duration = positiveDurationMinutes(row?.duration_minutes);
   if (!row || typeof row.title !== 'string' || typeof row.kind !== 'string' || duration === null) {
     return null;
   }
-  return { title: row.title, kind: row.kind, duration_minutes: duration };
+  return {
+    title: row.title,
+    kind: row.kind,
+    duration_minutes: duration,
+    coding_json: row.coding_json,
+  };
 }
 
 const TURN_ROLES: readonly InterviewTurnRole[] = ['user', 'assistant'];
@@ -302,11 +325,11 @@ export class InterviewCatalogService {
     return items;
   }
 
-  async getOwnSession(sessionId: string): Promise<InterviewSessionSummary | null> {
+  async getOwnSession(sessionId: string): Promise<InterviewSessionDetails | null> {
     const { data, error } = await supabase
       .from('interview_sessions')
       .select(
-        'id, status, template_id, prompt_version, template_version_id, started_at, ended_at, interview_templates(title, kind, duration_minutes), interview_template_versions(title, kind, duration_minutes)'
+        'id, status, template_id, prompt_version, template_version_id, started_at, ended_at, interview_templates(title, kind, duration_minutes, coding_json), interview_template_versions(title, kind, duration_minutes, coding_json)'
       )
       .eq('id', sessionId)
       .maybeSingle();
@@ -316,7 +339,8 @@ export class InterviewCatalogService {
 
     const row = data as unknown as SessionRow;
     const snapshot = embeddedTemplate(row.interview_template_versions);
-    const template = snapshot ?? embeddedTemplate(row.interview_templates);
+    const live = embeddedTemplate(row.interview_templates);
+    const template = snapshot ?? live;
     if (
       typeof row.id !== 'string' ||
       typeof row.status !== 'string' ||
@@ -330,6 +354,10 @@ export class InterviewCatalogService {
       return null;
     }
 
+    const codingProblem =
+      activeInterviewCodingProblem(snapshot?.coding_json) ??
+      (snapshot ? null : activeInterviewCodingProblem(live?.coding_json));
+
     return {
       id: row.id,
       status: row.status,
@@ -337,9 +365,68 @@ export class InterviewCatalogService {
       templateTitle: template.title,
       templateKind: template.kind,
       promptVersion: row.prompt_version,
+      templateVersionId:
+        typeof row.template_version_id === 'string' ? row.template_version_id : null,
+      codingProblem,
       startedAt: row.started_at,
       endedAt: typeof row.ended_at === 'string' ? row.ended_at : null,
       durationMinutes: template.duration_minutes,
+    };
+  }
+
+  async getSessionCoding(sessionId: string): Promise<InterviewSessionCodingResult | null> {
+    const { data, error } = await supabase
+      .from('interview_session_coding')
+      .select(
+        'session_id, language, code, passed_count, total_count, all_passed, results_json, problem_snapshot, updated_at, submitted_at'
+      )
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    if (error) throw error;
+    return parseInterviewSessionCodingRow(data);
+  }
+
+  /**
+   * Run public tests for the session coding step (INT-013).
+   * Persists code + results on the session for later INT-008 scorecard use.
+   */
+  async runCodingPublicTests(
+    sessionId: string,
+    code: string,
+    language: string
+  ): Promise<{
+    results: InterviewCodingPublicTestResult[];
+    passedCount: number;
+    total: number;
+    allPassed: boolean;
+  }> {
+    const { data, error } = await invokeAuthedFunction<{
+      results?: InterviewCodingPublicTestResult[];
+      passedCount?: number;
+      total?: number;
+      allPassed?: boolean;
+      error?: string;
+    }>('interview-run-code', {
+      sessionId,
+      code,
+      language,
+      persist: true,
+    });
+
+    if (error) throw await interviewFunctionError(error);
+    if (!data || !Array.isArray(data.results)) {
+      throw new InterviewRequestError(
+        typeof data?.error === 'string' && data.error.trim()
+          ? data.error
+          : 'Could not run public tests.',
+        'BAD_RESPONSE'
+      );
+    }
+    return {
+      results: data.results,
+      passedCount: typeof data.passedCount === 'number' ? data.passedCount : 0,
+      total: typeof data.total === 'number' ? data.total : data.results.length,
+      allPassed: data.allPassed === true,
     };
   }
 
@@ -427,6 +514,52 @@ export class InterviewCatalogService {
       throw new Error('This interview could not be ended. Please try again.');
     }
     return result.session;
+  }
+
+  /**
+   * Evaluation metadata, competency rows for the saved version, and the full transcript.
+   * A missing session and another student's session both come back as null.
+   */
+  async getOwnEvaluation(sessionId: string): Promise<InterviewEvaluationSnapshot | null> {
+    const { data, error } = await supabase
+      .from('interview_sessions')
+      .select('id, status, template_id, prompt_version, started_at, ended_at, overall_score, evaluation_status, eval_version, evaluated_at, evaluation_summary, evaluation_strengths, evaluation_improvements, evaluation_claimed_at, interview_templates(title, kind, duration_minutes)')
+      .eq('id', sessionId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!isRecord(data)) return null;
+
+    const version = typeof data['eval_version'] === 'string' ? data['eval_version'] : '';
+    let scoreQuery = supabase
+      .from('interview_scores')
+      .select('id, competency, score, rationale, evidence, eval_version, created_at')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    if (version) scoreQuery = scoreQuery.eq('eval_version', version);
+    const scores = await scoreQuery;
+    if (scores.error) throw scores.error;
+
+    const turns = await this.listOwnTurns(sessionId);
+    return parseEvaluationSnapshot(data, scores.data ?? [], turns);
+  }
+
+  /**
+   * Ask the evaluation function to score a completed session.
+   * The body carries only the session id. Scores in a client payload are not sent.
+   */
+  async requestEvaluation(sessionId: string): Promise<InterviewEvaluationResponse> {
+    const { data, error } = await invokeAuthedFunction<unknown>('interview-evaluate', { sessionId });
+    if (error) {
+      throw await interviewFunctionError(error, 'The evaluation could not be requested. Your interview is saved.');
+    }
+    const parsed = parseInterviewEvaluationResponse(data);
+    if (!parsed) {
+      throw new InterviewRequestError(
+        'The evaluation response was incomplete. Your interview is saved.',
+        'BAD_RESPONSE'
+      );
+    }
+    return parsed;
   }
 }
 
