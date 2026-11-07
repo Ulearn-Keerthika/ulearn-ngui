@@ -65,7 +65,11 @@ test('the results snapshot uses saved scores and keeps the transcript in order',
   assert.ok(snapshot);
   if (!snapshot) return;
   assert.equal(snapshot.overallScore, 75);
+  assert.equal(snapshot.aiOverallScore, 75);
+  assert.equal(snapshot.mentorReviewPublished, false);
+  assert.equal(snapshot.mentorAdjusted, false);
   assert.deepEqual(snapshot.competencies.map((item) => item.score), [80, 70]);
+  assert.deepEqual(snapshot.competencies.map((item) => item.aiScore), [80, 70]);
   assert.equal(snapshot.competencies[0]?.feedback, 'Both people were included.');
   assert.deepEqual(snapshot.strengths, ['Named a specific action.']);
   assert.deepEqual(snapshot.improvements, ['State what changed afterward.']);
@@ -81,6 +85,138 @@ test('the results snapshot uses saved scores and keeps the transcript in order',
     assistantTurns: 1,
     pollTimedOut: false,
   }), 'completed');
+});
+
+test('published mentor overrides change displayed scores without erasing AI baselines', () => {
+  const snapshot = parseEvaluationSnapshot(
+    { ...sessionRow, mentor_review_published: true },
+    [
+      {
+        id: 's1',
+        competency: 'Communication',
+        score: 70,
+        rationale: 'Clear.',
+        evidence: 'Short answer.',
+        eval_version: 'INT008-v1',
+      },
+      {
+        id: 's2',
+        competency: 'Coding',
+        score: 100,
+        rationale: 'Public tests passed.',
+        evidence: '2/2',
+        eval_version: 'INT008-v1',
+      },
+    ],
+    turns,
+    [
+      {
+        id: 'o1',
+        session_id: sessionRow.id,
+        mentor_id: 'mentor-1',
+        target_kind: 'competency',
+        competency: 'Communication',
+        eval_version: 'INT008-v1',
+        old_score: 70,
+        new_score: 85,
+        reason: 'Transcript shows stronger clarity than the model credited.',
+        created_at: '2026-11-07T10:00:00.000Z',
+      },
+      {
+        id: 'o2',
+        session_id: sessionRow.id,
+        mentor_id: 'mentor-1',
+        target_kind: 'overall',
+        competency: null,
+        eval_version: 'INT008-v1',
+        old_score: 92.5,
+        new_score: 90,
+        reason: 'Overall capped after coaching discussion with the student.',
+        created_at: '2026-11-07T10:05:00.000Z',
+      },
+    ]
+  );
+  assert.ok(snapshot);
+  if (!snapshot) return;
+  assert.equal(snapshot.mentorReviewPublished, true);
+  assert.equal(snapshot.mentorAdjusted, true);
+  assert.equal(snapshot.aiOverallScore, 75);
+  assert.equal(snapshot.overallScore, 90);
+  assert.equal(snapshot.competencies.find((row) => row.competency === 'Communication')?.score, 85);
+  assert.equal(snapshot.competencies.find((row) => row.competency === 'Communication')?.aiScore, 70);
+  assert.equal(snapshot.competencies.find((row) => row.competency === 'Coding')?.score, 100);
+  assert.equal(snapshot.competencies.find((row) => row.competency === 'Coding')?.mentorAdjusted, false);
+});
+
+test('overrides from a different eval_version do not affect the displayed scorecard', () => {
+  const snapshot = parseEvaluationSnapshot(
+    { ...sessionRow, mentor_review_published: true },
+    [
+      {
+        id: 's1',
+        competency: 'Communication',
+        score: 70,
+        rationale: 'Clear.',
+        evidence: 'Short answer.',
+        eval_version: 'INT008-v1',
+      },
+    ],
+    turns,
+    [
+      {
+        id: 'old-version',
+        session_id: sessionRow.id,
+        mentor_id: 'mentor-1',
+        target_kind: 'competency',
+        competency: 'Communication',
+        eval_version: 'INT008-v0',
+        old_score: 70,
+        new_score: 99,
+        reason: 'Stale override from a previous evaluation version.',
+        created_at: '2026-11-07T10:00:00.000Z',
+      },
+    ]
+  );
+  assert.ok(snapshot);
+  if (!snapshot) return;
+  assert.equal(snapshot.competencies[0]?.score, 70);
+  assert.equal(snapshot.mentorAdjusted, false);
+});
+
+test('unpublished mentor overrides stay hidden from the student snapshot', () => {
+  const snapshot = parseEvaluationSnapshot(
+    { ...sessionRow, mentor_review_published: false },
+    [
+      {
+        id: 's1',
+        competency: 'Communication',
+        score: 70,
+        rationale: 'Clear.',
+        evidence: 'Short answer.',
+        eval_version: 'INT008-v1',
+      },
+    ],
+    turns,
+    [
+      {
+        id: 'o1',
+        session_id: sessionRow.id,
+        mentor_id: 'mentor-1',
+        target_kind: 'competency',
+        competency: 'Communication',
+        eval_version: 'INT008-v1',
+        old_score: 70,
+        new_score: 95,
+        reason: 'Should remain hidden until published to the student.',
+        created_at: '2026-11-07T10:00:00.000Z',
+      },
+    ]
+  );
+  assert.ok(snapshot);
+  if (!snapshot) return;
+  assert.equal(snapshot.overallScore, 75);
+  assert.equal(snapshot.competencies[0]?.score, 70);
+  assert.equal(snapshot.mentorAdjusted, false);
 });
 
 test('processing, failure, retry, and unauthorized states stay distinct', () => {

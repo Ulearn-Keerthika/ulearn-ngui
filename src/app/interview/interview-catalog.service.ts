@@ -29,6 +29,12 @@ import {
   type InterviewEvaluationResponse,
 } from './interview-evaluation';
 import { formatTemplateVersionNumber } from './interview-prompt-version';
+import {
+  effectiveOverallScore,
+  hasMentorAdjustments,
+  overridesForEvalVersion,
+  parseOverrideRows,
+} from './interview-score-overrides';
 import { positiveDurationMinutes } from './interview-timer';
 
 const HISTORY_LIST_LIMIT = 50;
@@ -75,6 +81,8 @@ interface HistorySessionRow {
   started_at: string;
   ended_at: string | null;
   overall_score: number | null;
+  eval_version?: string | null;
+  mentor_review_published?: boolean | null;
   interview_templates: { title: string } | { title: string }[] | null;
 }
 
@@ -289,29 +297,116 @@ export class InterviewCatalogService {
 
   /**
    * List the signed-in student's sessions (newest first). Ownership enforced by RLS.
+   * When mentor_review_published, overallScore is the mentor-effective value
+   * (AI interview_sessions.overall_score is never overwritten).
    */
   async listOwnSessions(): Promise<InterviewHistoryItem[]> {
     const { data, error } = await supabase
       .from('interview_sessions')
-      .select('id, status, started_at, ended_at, overall_score, interview_templates(title)')
+      .select(
+        'id, status, started_at, ended_at, overall_score, eval_version, mentor_review_published, interview_templates(title)'
+      )
       .order('started_at', { ascending: false })
       .limit(HISTORY_LIST_LIMIT);
 
     if (error) throw error;
 
-    const items: InterviewHistoryItem[] = [];
+    const rows: HistorySessionRow[] = [];
     for (const raw of data ?? []) {
       const row = raw as unknown as HistorySessionRow;
       if (typeof row.id !== 'string' || typeof row.status !== 'string') continue;
       if (!isSessionStatus(row.status)) continue;
       if (typeof row.started_at !== 'string') continue;
+      rows.push(row);
+    }
 
+    const publishedIds = rows
+      .filter((row) => row.mentor_review_published === true)
+      .map((row) => row.id);
+
+    const overridesBySession = new Map<string, ReturnType<typeof parseOverrideRows>>();
+    const scoresBySession = new Map<
+      string,
+      { competency: string; score: number; evalVersion: string }[]
+    >();
+
+    if (publishedIds.length > 0) {
+      const [overrideQuery, scoreQuery] = await Promise.all([
+        supabase
+          .from('interview_score_overrides')
+          .select(
+            'id, session_id, mentor_id, target_kind, competency, eval_version, old_score, new_score, reason, created_at'
+          )
+          .in('session_id', publishedIds)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('interview_scores')
+          .select('session_id, competency, score, eval_version')
+          .in('session_id', publishedIds),
+      ]);
+      if (overrideQuery.error) throw overrideQuery.error;
+      if (scoreQuery.error) throw scoreQuery.error;
+
+      for (const sessionId of publishedIds) {
+        overridesBySession.set(
+          sessionId,
+          parseOverrideRows(
+            (overrideQuery.data ?? []).filter(
+              (row) => isRecord(row) && row['session_id'] === sessionId
+            )
+          )
+        );
+      }
+
+      for (const raw of scoreQuery.data ?? []) {
+        if (!isRecord(raw) || typeof raw['session_id'] !== 'string') continue;
+        if (typeof raw['competency'] !== 'string') continue;
+        if (typeof raw['eval_version'] !== 'string' || !raw['eval_version']) continue;
+        const score =
+          typeof raw['score'] === 'number'
+            ? raw['score']
+            : typeof raw['score'] === 'string'
+              ? Number(raw['score'])
+              : NaN;
+        if (!Number.isFinite(score)) continue;
+        const list = scoresBySession.get(raw['session_id']) ?? [];
+        list.push({
+          competency: raw['competency'],
+          score,
+          evalVersion: raw['eval_version'],
+        });
+        scoresBySession.set(raw['session_id'], list);
+      }
+    }
+
+    const items: InterviewHistoryItem[] = [];
+    for (const row of rows) {
       const template = embeddedTemplateTitle(row.interview_templates);
-      const score =
+      const aiScore =
         typeof row.overall_score === 'number' && Number.isFinite(row.overall_score)
           ? row.overall_score
           : null;
       const endedAt = typeof row.ended_at === 'string' ? row.ended_at : null;
+      const published = row.mentor_review_published === true;
+      const evalVersion =
+        typeof row.eval_version === 'string' && row.eval_version.trim()
+          ? row.eval_version.trim()
+          : null;
+
+      let overallScore = aiScore;
+      let mentorAdjusted = false;
+      if (published && evalVersion) {
+        const overrides = overridesForEvalVersion(
+          overridesBySession.get(row.id) ?? [],
+          evalVersion
+        );
+        const aiCompetencies = (scoresBySession.get(row.id) ?? [])
+          .filter((item) => item.evalVersion === evalVersion)
+          .map((item) => ({ competency: item.competency, score: item.score }));
+        const effective = effectiveOverallScore(aiCompetencies, overrides, aiScore);
+        overallScore = effective;
+        mentorAdjusted = hasMentorAdjustments(aiCompetencies, overrides);
+      }
 
       items.push({
         id: row.id,
@@ -319,7 +414,9 @@ export class InterviewCatalogService {
         status: row.status,
         startedAt: row.started_at,
         endedAt,
-        overallScore: score,
+        overallScore,
+        mentorReviewPublished: published,
+        mentorAdjusted,
       });
     }
     return items;
@@ -523,7 +620,7 @@ export class InterviewCatalogService {
   async getOwnEvaluation(sessionId: string): Promise<InterviewEvaluationSnapshot | null> {
     const { data, error } = await supabase
       .from('interview_sessions')
-      .select('id, status, template_id, prompt_version, started_at, ended_at, overall_score, evaluation_status, eval_version, evaluated_at, evaluation_summary, evaluation_strengths, evaluation_improvements, evaluation_claimed_at, interview_templates(title, kind, duration_minutes)')
+      .select('id, status, template_id, prompt_version, started_at, ended_at, overall_score, evaluation_status, eval_version, evaluated_at, evaluation_summary, evaluation_strengths, evaluation_improvements, evaluation_claimed_at, mentor_review_published, interview_templates(title, kind, duration_minutes)')
       .eq('id', sessionId)
       .maybeSingle();
     if (error) throw error;
@@ -540,7 +637,22 @@ export class InterviewCatalogService {
     if (scores.error) throw scores.error;
 
     const turns = await this.listOwnTurns(sessionId);
-    return parseEvaluationSnapshot(data, scores.data ?? [], turns);
+
+    // RLS only returns override rows when mentor_review_published is true for this owner.
+    let overrides: unknown[] = [];
+    if (data['mentor_review_published'] === true) {
+      const overrideQuery = await supabase
+        .from('interview_score_overrides')
+        .select(
+          'id, session_id, mentor_id, target_kind, competency, eval_version, old_score, new_score, reason, created_at'
+        )
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+      if (overrideQuery.error) throw overrideQuery.error;
+      overrides = overrideQuery.data ?? [];
+    }
+
+    return parseEvaluationSnapshot(data, scores.data ?? [], turns, overrides);
   }
 
   /**

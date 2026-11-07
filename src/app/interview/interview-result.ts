@@ -117,6 +117,12 @@ import {
               } @else {
                 <p class="score-value">—</p>
               }
+              @if (data.mentorAdjusted) {
+                <p class="mentor-adjusted" role="status">Mentor-adjusted score</p>
+                @if (data.aiOverallScore !== null && data.aiOverallScore !== data.overallScore) {
+                  <p class="ai-baseline">AI score {{ scoreText(data.aiOverallScore) }}/100</p>
+                }
+              }
             </div>
             <div>
               <h2>Overall performance</h2>
@@ -139,6 +145,11 @@ import {
                       <h3>{{ item.competency }}</h3>
                       <p>{{ scoreText(item.score) }}/100</p>
                     </div>
+                    @if (item.mentorAdjusted) {
+                      <p class="mentor-adjusted" role="status">
+                        Mentor-adjusted (AI {{ scoreText(item.aiScore) }})
+                      </p>
+                    }
                     @if (isCodingCompetency(item.competency)) {
                       <p class="coding-outcome" [class.ok]="item.score >= 100" role="status">
                         {{ codingOutcomeLabel(item.score) }}
@@ -259,6 +270,20 @@ import {
       text-transform: uppercase;
     }
     .coding-outcome.ok { color: #166534; }
+    .mentor-adjusted {
+      margin-top: 8px;
+      color: #65469b;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .ai-baseline {
+      margin-top: 4px;
+      color: #626277;
+      font-size: 13px;
+      font-weight: 700;
+    }
     .feedback { color: var(--text); }
     .evidence { font-size: 14px; }
     .notes { list-style: disc; padding-left: 20px; }
