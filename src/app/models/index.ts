@@ -774,9 +774,31 @@ export interface InterviewSessionSummary {
   templateKind: InterviewTemplateKind;
   promptVersion: string;
   templateVersionId?: string | null;
+  /** Parent attempt when this session is a redo (INT-011). */
+  redoOfSessionId?: string | null;
   startedAt: string;
   endedAt: string | null;
   durationMinutes: number;
+}
+
+/** Overall or competency trend between two linked attempts (INT-011). */
+export type InterviewScoreTrend = 'improved' | 'regressed' | 'unchanged' | 'unavailable';
+
+export interface InterviewScoreDelta {
+  before: number | null;
+  after: number | null;
+  delta: number | null;
+  trend: InterviewScoreTrend;
+}
+
+export interface InterviewCompetencyComparison extends InterviewScoreDelta {
+  competency: string;
+}
+
+/** Before/after scorecard derived from two INT-008 evaluation snapshots. */
+export interface InterviewEvaluationComparison {
+  overall: InterviewScoreDelta;
+  competencies: InterviewCompetencyComparison[];
 }
 
 /** One stored student or interviewer message. */
@@ -823,4 +845,5 @@ export interface InterviewHistoryItem {
   startedAt: string;
   endedAt: string | null;
   overallScore: number | null;
+  redoOfSessionId: string | null;
 }

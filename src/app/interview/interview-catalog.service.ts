@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { invokeAuthedFunction, supabase } from '../core/supabase.client';
 import {
   InterviewEvaluationSnapshot,
@@ -10,6 +10,7 @@ import {
   InterviewTurn,
   InterviewTurnRole,
 } from '../models';
+import { InterviewService } from './interview.service';
 import {
   InterviewRequestError,
   interviewFunctionError,
@@ -75,7 +76,17 @@ interface HistorySessionRow {
   started_at: string;
   ended_at: string | null;
   overall_score: number | null;
+  redo_of_session_id?: string | null;
   interview_templates: { title: string } | { title: string }[] | null;
+}
+
+interface RedoParentRow {
+  id: string;
+  user_id: string;
+  status: string;
+  template_id: string;
+  prompt_version: string;
+  template_version_id: string | null;
 }
 
 /**
@@ -182,6 +193,7 @@ function embeddedTemplateTitle(
 
 @Injectable({ providedIn: 'root' })
 export class InterviewCatalogService {
+  private readonly interviewService = inject(InterviewService);
   /** Published templates only. Drafts are excluded here and by RLS. */
   async listPublishedTemplates(): Promise<InterviewTemplate[]> {
     const { data, error } = await supabase
@@ -245,6 +257,82 @@ export class InterviewCatalogService {
     return data['id'];
   }
 
+  /**
+   * Start a redo of a completed own session (INT-011).
+   * Reuses the parent's template_id, template_version_id, and prompt_version.
+   * Does not resolve the latest published version.
+   */
+  async startRedoSession(previousSessionId: string): Promise<string> {
+    const parentId = previousSessionId.trim();
+    if (!parentId) {
+      throw new Error('This interview could not be redone.');
+    }
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError) throw userError;
+    const userId = userData.user?.id;
+    if (!userId) {
+      throw new Error('Sign in again to start an interview.');
+    }
+
+    const quota = await this.interviewService.loadQuota();
+    if (!quota.ok) {
+      throw new Error(quota.error || 'Could not load weekly interview quota.');
+    }
+    if (quota.quota.remaining <= 0) {
+      throw new Error(
+        `Weekly mock interview limit reached (${quota.quota.used}/${quota.quota.weekly_limit}). Try again after your quota resets.`
+      );
+    }
+
+    const { data: parentRaw, error: parentError } = await supabase
+      .from('interview_sessions')
+      .select('id, user_id, status, template_id, prompt_version, template_version_id')
+      .eq('id', parentId)
+      .maybeSingle();
+    if (parentError) throw parentError;
+    if (!isRecord(parentRaw)) {
+      throw new Error('This interview could not be opened for a redo.');
+    }
+
+    const parent = parentRaw as unknown as RedoParentRow;
+    if (parent.user_id !== userId) {
+      throw new Error('This interview could not be opened for a redo.');
+    }
+    if (parent.status !== 'completed') {
+      throw new Error('Only a completed interview can be redone.');
+    }
+    if (typeof parent.template_id !== 'string' || !parent.template_id) {
+      throw new Error('This interview could not be redone.');
+    }
+    if (typeof parent.prompt_version !== 'string' || !parent.prompt_version.trim()) {
+      throw new Error('This interview could not be redone.');
+    }
+
+    const insertPayload: Record<string, unknown> = {
+      user_id: userId,
+      template_id: parent.template_id,
+      status: 'in_progress',
+      prompt_version: parent.prompt_version,
+      redo_of_session_id: parent.id,
+    };
+    if (typeof parent.template_version_id === 'string' && parent.template_version_id) {
+      insertPayload['template_version_id'] = parent.template_version_id;
+    }
+
+    const { data, error } = await supabase
+      .from('interview_sessions')
+      .insert(insertPayload)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    if (!isRecord(data) || typeof data['id'] !== 'string' || !data['id']) {
+      throw new Error('The redo interview session was not created.');
+    }
+    return data['id'];
+  }
+
   /** Latest published snapshot for a template (INT-009). */
   private async latestPublishedTemplateVersion(
     templateId: string
@@ -293,7 +381,7 @@ export class InterviewCatalogService {
   async listOwnSessions(): Promise<InterviewHistoryItem[]> {
     const { data, error } = await supabase
       .from('interview_sessions')
-      .select('id, status, started_at, ended_at, overall_score, interview_templates(title)')
+      .select('id, status, started_at, ended_at, overall_score, redo_of_session_id, interview_templates(title)')
       .order('started_at', { ascending: false })
       .limit(HISTORY_LIST_LIMIT);
 
@@ -320,6 +408,8 @@ export class InterviewCatalogService {
         startedAt: row.started_at,
         endedAt,
         overallScore: score,
+        redoOfSessionId:
+          typeof row.redo_of_session_id === 'string' ? row.redo_of_session_id : null,
       });
     }
     return items;
@@ -329,7 +419,7 @@ export class InterviewCatalogService {
     const { data, error } = await supabase
       .from('interview_sessions')
       .select(
-        'id, status, template_id, prompt_version, template_version_id, started_at, ended_at, interview_templates(title, kind, duration_minutes, coding_json), interview_template_versions(title, kind, duration_minutes, coding_json)'
+        'id, status, template_id, prompt_version, template_version_id, redo_of_session_id, started_at, ended_at, interview_templates(title, kind, duration_minutes, coding_json), interview_template_versions(title, kind, duration_minutes, coding_json)'
       )
       .eq('id', sessionId)
       .maybeSingle();
@@ -337,7 +427,7 @@ export class InterviewCatalogService {
     if (error) throw error;
     if (!isRecord(data)) return null;
 
-    const row = data as unknown as SessionRow;
+    const row = data as unknown as SessionRow & { redo_of_session_id?: string | null };
     const snapshot = embeddedTemplate(row.interview_template_versions);
     const live = embeddedTemplate(row.interview_templates);
     const template = snapshot ?? live;
@@ -367,6 +457,8 @@ export class InterviewCatalogService {
       promptVersion: row.prompt_version,
       templateVersionId:
         typeof row.template_version_id === 'string' ? row.template_version_id : null,
+      redoOfSessionId:
+        typeof row.redo_of_session_id === 'string' ? row.redo_of_session_id : null,
       codingProblem,
       startedAt: row.started_at,
       endedAt: typeof row.ended_at === 'string' ? row.ended_at : null,
@@ -523,7 +615,7 @@ export class InterviewCatalogService {
   async getOwnEvaluation(sessionId: string): Promise<InterviewEvaluationSnapshot | null> {
     const { data, error } = await supabase
       .from('interview_sessions')
-      .select('id, status, template_id, prompt_version, started_at, ended_at, overall_score, evaluation_status, eval_version, evaluated_at, evaluation_summary, evaluation_strengths, evaluation_improvements, evaluation_claimed_at, interview_templates(title, kind, duration_minutes)')
+      .select('id, status, template_id, prompt_version, template_version_id, redo_of_session_id, started_at, ended_at, overall_score, evaluation_status, eval_version, evaluated_at, evaluation_summary, evaluation_strengths, evaluation_improvements, evaluation_claimed_at, interview_templates(title, kind, duration_minutes)')
       .eq('id', sessionId)
       .maybeSingle();
     if (error) throw error;

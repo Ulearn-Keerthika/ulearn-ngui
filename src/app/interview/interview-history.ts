@@ -41,6 +41,9 @@ import { InterviewCatalogService, interviewErrorMessage } from './interview-cata
                 <p class="meta">{{ formatDate(session) }}</p>
                 <p class="meta">
                   <span class="badge" [attr.data-status]="session.status">{{ statusLabel(session.status) }}</span>
+                  @if (session.redoOfSessionId) {
+                    <span class="badge redo">Redo</span>
+                  }
                   @if (session.status === 'completed') {
                     <span class="score">Score: {{ scoreLabel(session) }}</span>
                   }
@@ -151,6 +154,11 @@ import { InterviewCatalogService, interviewErrorMessage } from './interview-cata
     .badge[data-status='failed'] {
       background: #fdecec;
       color: #991b1b;
+    }
+    .badge.redo {
+      margin-left: 8px;
+      background: #f3eff9;
+      color: var(--purple);
     }
     .score {
       margin-left: 12px;

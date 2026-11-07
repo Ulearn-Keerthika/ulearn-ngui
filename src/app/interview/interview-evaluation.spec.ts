@@ -3,8 +3,12 @@ import test from 'node:test';
 import type { InterviewTurn } from '../models/index.ts';
 import {
   canReclaimEvaluation,
+  canStartInterviewRedo,
+  compareInterviewEvaluations,
   evaluationPhase,
   formatScore,
+  formatScoreDelta,
+  interviewRedoBlockedReason,
   parseEvaluationSnapshot,
   parseInterviewEvaluationResponse,
   scoreBarPercent,
@@ -156,4 +160,95 @@ test('the function response is accepted only when it has saved score fields', ()
   assert.equal(parsed?.competencies[0]?.score, 70);
   assert.equal(parseInterviewEvaluationResponse({ status: 'completed', overallScore: 140 }), null);
   assert.equal(parseInterviewEvaluationResponse({ status: 'processing' }), null);
+});
+
+test('redo is allowed for completed sessions except while evaluation is processing', () => {
+  assert.equal(canStartInterviewRedo('completed', 'completed'), true);
+  assert.equal(canStartInterviewRedo('completed', 'failed'), true);
+  assert.equal(canStartInterviewRedo('completed', null), true);
+  assert.equal(canStartInterviewRedo('completed', 'processing'), false);
+  assert.equal(canStartInterviewRedo('in_progress', 'completed'), false);
+  assert.match(interviewRedoBlockedReason('completed', 'processing') ?? '', /scoring finishes/);
+});
+
+test('compareInterviewEvaluations reports overall and competency deltas without inventing missing scores', () => {
+  const before = parseEvaluationSnapshot(sessionRow, [
+    {
+      id: 'b1',
+      competency: 'Communication',
+      score: 60,
+      rationale: 'Okay.',
+      evidence: 'Short answer.',
+      eval_version: 'INT008-v1',
+    },
+    {
+      id: 'b2',
+      competency: 'Teamwork',
+      score: 70,
+      rationale: 'Shared work.',
+      evidence: 'Asked both people.',
+      eval_version: 'INT008-v1',
+    },
+  ], turns);
+  const afterRow = {
+    ...sessionRow,
+    id: '33333333-3333-4333-8333-333333333333',
+    overall_score: '80.00',
+    redo_of_session_id: sessionRow.id,
+  };
+  const after = parseEvaluationSnapshot(afterRow, [
+    {
+      id: 'a1',
+      competency: 'Communication',
+      score: 80,
+      rationale: 'Clearer.',
+      evidence: 'Named the result.',
+      eval_version: 'INT008-v1',
+    },
+    {
+      id: 'a3',
+      competency: 'Coding',
+      score: 100,
+      rationale: 'Passed all public tests.',
+      evidence: '2/2 javascript',
+      eval_version: 'INT008-v1',
+    },
+  ], turns);
+  assert.ok(before);
+  assert.ok(after);
+  if (!before || !after) return;
+
+  assert.equal(after.session.redoOfSessionId, sessionRow.id);
+  const compared = compareInterviewEvaluations(before, after);
+  assert.equal(compared.overall.before, 75);
+  assert.equal(compared.overall.after, 80);
+  assert.equal(compared.overall.delta, 5);
+  assert.equal(compared.overall.trend, 'improved');
+  assert.equal(formatScoreDelta(5), '+5');
+
+  const communication = compared.competencies.find((row) => row.competency === 'Communication');
+  const teamwork = compared.competencies.find((row) => row.competency === 'Teamwork');
+  const coding = compared.competencies.find((row) => row.competency === 'Coding');
+  assert.equal(communication?.delta, 20);
+  assert.equal(communication?.trend, 'improved');
+  assert.equal(teamwork?.before, 70);
+  assert.equal(teamwork?.after, null);
+  assert.equal(teamwork?.delta, null);
+  assert.equal(teamwork?.trend, 'unavailable');
+  assert.equal(coding?.before, null);
+  assert.equal(coding?.after, 100);
+  assert.equal(coding?.trend, 'unavailable');
+  assert.equal(compared.competencies.filter((row) => row.competency === 'Coding').length, 1);
+
+  const regressed = compareInterviewEvaluations(after, before);
+  assert.equal(regressed.overall.trend, 'regressed');
+  assert.equal(regressed.overall.delta, -5);
+
+  const missingOverall = compareInterviewEvaluations(null, {
+    ...after,
+    overallScore: null,
+    competencies: after.competencies,
+  });
+  assert.equal(missingOverall.overall.trend, 'unavailable');
+  assert.equal(missingOverall.overall.delta, null);
 });
