@@ -1,4 +1,3 @@
-
 -- INT-006: Read weekly interview quota for the authenticated user.
 
 CREATE OR REPLACE FUNCTION public.get_interview_quota_status()
@@ -66,13 +65,18 @@ GRANT EXECUTE ON FUNCTION public.get_interview_quota_status()
   TO authenticated;
 
 
--- Enforce interview permission inside the session-start operation.
--- Optional p_resume_session_id reopens an in-progress session without consuming quota.
+-- INT-006: Atomically enforce the weekly quota and create/resume a session.
 --
--- Resume policy (INT-006): only sessions with status = 'started' AND started_at in the
--- current IST quota window [week_start, week_end) may be resumed. Older in-progress rows
--- are not resumable; the client must start a new session (which consumes quota if available).
+-- New sessions consume one quota slot.
+-- Resuming an eligible current-week in-progress session does not consume quota.
+-- The per-user row lock serializes concurrent new starts.
+
+DROP FUNCTION IF EXISTS public.start_interview_with_quota(uuid);
+
 CREATE OR REPLACE FUNCTION public.start_interview_with_quota(
+  p_template_id uuid,
+  p_prompt_version text,
+  p_template_version_id uuid,
   p_resume_session_id uuid DEFAULT NULL
 )
 RETURNS jsonb
@@ -99,6 +103,17 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
+  IF p_resume_session_id IS NULL
+     AND (
+       p_template_id IS NULL
+       OR p_prompt_version IS NULL
+       OR p_prompt_version = ''
+       OR p_template_version_id IS NULL
+     ) THEN
+    RAISE EXCEPTION 'Interview template version information is required'
+      USING ERRCODE = '22023';
+  END IF;
+
   v_week_start :=
     date_trunc(
       'week',
@@ -117,13 +132,14 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
+  -- Resume an existing current-week in-progress session without consuming quota.
   IF p_resume_session_id IS NOT NULL THEN
     SELECT s.id, s.status
       INTO v_session_id, v_session_status
       FROM public.interview_sessions s
      WHERE s.id = p_resume_session_id
        AND s.user_id = v_user_id
-       AND s.status = 'started'
+       AND s.status = 'in_progress'
        AND s.started_at >= v_week_start
        AND s.started_at < v_week_end;
 
@@ -152,6 +168,7 @@ BEGIN
     );
   END IF;
 
+  -- Serialize concurrent new starts for this student.
   INSERT INTO public.interview_quota_user_locks (user_id)
   VALUES (v_user_id)
   ON CONFLICT (user_id) DO NOTHING;
@@ -180,15 +197,28 @@ BEGIN
     );
   END IF;
 
-  INSERT INTO public.interview_sessions (user_id, status)
-  VALUES (v_user_id, 'started')
+  INSERT INTO public.interview_sessions (
+    user_id,
+    template_id,
+    status,
+    prompt_version,
+    template_version_id
+  )
+  VALUES (
+    v_user_id,
+    p_template_id,
+    'in_progress',
+    p_prompt_version,
+    p_template_version_id
+  )
   RETURNING id INTO v_session_id;
 
   v_used := v_used + 1;
 
   RETURN jsonb_build_object(
     'session_id', v_session_id,
-    'status', 'started',
+    'status', 'in_progress',
+    'resumed', false,
     'weekly_limit', v_limit,
     'limit', v_limit,
     'used', v_used,
@@ -199,10 +229,22 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.start_interview_with_quota(uuid)
-  FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.start_interview_with_quota(uuid)
-  TO authenticated;
+REVOKE ALL ON FUNCTION public.start_interview_with_quota(
+  uuid,
+  text,
+  uuid,
+  uuid
+)
+FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.start_interview_with_quota(
+  uuid,
+  text,
+  uuid,
+  uuid
+)
+TO authenticated;
+
 
 -- Staff: update the global weekly mock interview limit (positive integer only).
 CREATE OR REPLACE FUNCTION public.set_interview_weekly_quota_limit(p_weekly_limit integer)

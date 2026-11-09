@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { supabase } from '../core/supabase.client';
 import {
   InterviewSessionStatus,
@@ -6,6 +6,7 @@ import {
   InterviewTemplate,
   InterviewTemplateKind,
 } from '../models';
+import { InterviewService } from './interview.service';
 
 const TEMPLATE_KINDS: readonly InterviewTemplateKind[] = ['hr', 'technical', 'domain'];
 const SESSION_STATUSES: readonly InterviewSessionStatus[] = ['in_progress', 'completed', 'failed'];
@@ -34,6 +35,10 @@ interface SessionRow {
  */
 export function interviewPromptVersion(template: Pick<InterviewTemplate, 'slug' | 'createdAt'>): string {
   return `${template.slug}:${template.createdAt}`;
+}
+
+function formatTemplateVersionNumber(version: number): string {
+  return String(version);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -89,6 +94,8 @@ function embeddedTemplate(
 
 @Injectable({ providedIn: 'root' })
 export class InterviewCatalogService {
+  private readonly interviewService = inject(InterviewService);
+
   /** Published templates only. Drafts are excluded here and by RLS. */
   async listPublishedTemplates(): Promise<InterviewTemplate[]> {
     const { data, error } = await supabase
@@ -116,33 +123,69 @@ export class InterviewCatalogService {
   }
 
   /**
-   * Insert an in-progress session for the signed-in student.
+   * Start an in-progress session via interview-start (INT-006 quota).
+   * Pins prompt_version + template_version_id to the template's current snapshot.
    * Returns the new session id.
    */
   async startSession(template: InterviewTemplate): Promise<string> {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError) throw userError;
-    const userId = userData.user?.id;
-    if (!userId) {
-      throw new Error('Sign in again to start an interview.');
+    const version = await this.latestPublishedTemplateVersion(template.id);
+    if (!version) {
+      throw new Error('This interview is not available right now.');
     }
 
-    const { data, error } = await supabase
-      .from('interview_sessions')
-      .insert({
-        user_id: userId,
-        template_id: template.id,
-        status: 'in_progress',
-        prompt_version: interviewPromptVersion(template),
-      })
-      .select('id')
-      .single();
+    const outcome = await this.interviewService.startInterview({
+      templateId: template.id,
+      promptVersion: formatTemplateVersionNumber(version.version),
+      templateVersionId: version.id,
+    });
 
-    if (error) throw error;
-    if (!isRecord(data) || typeof data['id'] !== 'string' || !data['id']) {
-      throw new Error('The interview session was not created.');
+    if (!outcome.ok) {
+      throw new Error(outcome.error || 'The interview session was not created.');
     }
-    return data['id'];
+
+    return outcome.result.session_id;
+  }
+
+  /** Latest published snapshot for a template. */
+  private async latestPublishedTemplateVersion(
+    templateId: string
+  ): Promise<{ id: string; version: number } | null> {
+    const { data: template, error: templateError } = await supabase
+      .from('interview_templates')
+      .select('id, status, current_version')
+      .eq('id', templateId)
+      .eq('status', 'published')
+      .maybeSingle();
+
+    if (templateError) throw templateError;
+    if (!isRecord(template)) return null;
+    const currentVersion = template['current_version'];
+    const versionNumber =
+      typeof currentVersion === 'number'
+        ? currentVersion
+        : typeof currentVersion === 'string'
+          ? Number(currentVersion)
+          : NaN;
+    if (!Number.isInteger(versionNumber) || versionNumber <= 0) return null;
+
+    const { data: versionRow, error: versionError } = await supabase
+      .from('interview_template_versions')
+      .select('id, version')
+      .eq('template_id', templateId)
+      .eq('version', versionNumber)
+      .maybeSingle();
+
+    if (versionError) throw versionError;
+    if (!isRecord(versionRow) || typeof versionRow['id'] !== 'string') return null;
+    const storedVersion = versionRow['version'];
+    const parsedVersion =
+      typeof storedVersion === 'number'
+        ? storedVersion
+        : typeof storedVersion === 'string'
+          ? Number(storedVersion)
+          : NaN;
+    if (!Number.isInteger(parsedVersion) || parsedVersion <= 0) return null;
+    return { id: versionRow['id'], version: parsedVersion };
   }
 
   async getOwnSession(sessionId: string): Promise<InterviewSessionSummary | null> {

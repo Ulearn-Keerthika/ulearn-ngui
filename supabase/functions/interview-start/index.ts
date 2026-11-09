@@ -65,22 +65,51 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Interview access denied.' }, 403);
     }
 
+    let templateId: string | null = null;
+    let promptVersion: string | null = null;
+    let templateVersionId: string | null = null;
     let resumeSessionId: string | null = null;
+
     try {
       const body = await req.json();
-      if (
-        body &&
-        typeof body === 'object' &&
-        typeof body.session_id === 'string' &&
-        body.session_id.length > 0
-      ) {
-        resumeSessionId = body.session_id;
+      if (body && typeof body === 'object') {
+        if (typeof body.session_id === 'string' && body.session_id.length > 0) {
+          resumeSessionId = body.session_id;
+        }
+        if (typeof body.template_id === 'string' && body.template_id.length > 0) {
+          templateId = body.template_id;
+        }
+        if (
+          typeof body.prompt_version === 'string' &&
+          body.prompt_version.length > 0
+        ) {
+          promptVersion = body.prompt_version;
+        }
+        if (
+          typeof body.template_version_id === 'string' &&
+          body.template_version_id.length > 0
+        ) {
+          templateVersionId = body.template_version_id;
+        }
       }
     } catch {
-      /* empty body is valid for a new session */
+      /* empty body is invalid for a new session; resume still needs session_id */
+    }
+
+    // Resume only needs session_id. New starts require template version fields.
+    if (!resumeSessionId) {
+      if (!templateId || !promptVersion || !templateVersionId) {
+        return json(
+          { error: 'Interview template version information is required' },
+          400,
+        );
+      }
     }
 
     const { data, error } = await userClient.rpc('start_interview_with_quota', {
+      p_template_id: templateId,
+      p_prompt_version: promptVersion,
+      p_template_version_id: templateVersionId,
       p_resume_session_id: resumeSessionId,
     });
 
