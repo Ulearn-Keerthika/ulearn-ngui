@@ -3,397 +3,447 @@ import {
   Component,
   HostListener,
   OnInit,
+  computed,
   inject,
   signal
 } from '@angular/core';
-import { InterviewQuota, InterviewService } from './interview.service';
-
-const ACTIVE_SESSION_KEY = 'ulearn.interview.activeSessionId';
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { InterviewTemplate, InterviewTemplateKind } from '../models';
 import { InterviewCatalogService, interviewErrorMessage } from './interview-catalog.service';
+import { InterviewQuota, InterviewService } from './interview.service';
 
 interface CatalogGroup {
   kind: InterviewTemplateKind;
   label: string;
-  description: string;
   templates: InterviewTemplate[];
 }
 
-const KIND_COPY: Record<InterviewTemplateKind, { label: string; description: string }> = {
-  hr: {
-    label: 'HR',
-    description:
-      'Behavioral questions about teamwork, communication, challenges, and how you make decisions.',
-  },
-  technical: {
-    label: 'Technical',
-    description:
-      'Programming, data structures, algorithms, and how you explain a technical solution.',
-  },
-  domain: {
-    label: 'Domain',
-    description: 'Questions focused on a specific subject area.',
-  },
-};
-
-const KIND_ORDER: readonly InterviewTemplateKind[] = ['hr', 'technical', 'domain'];
+const ACTIVE_SESSION_KEY = 'ulearn.interview.activeSessionId';
 
 @Component({
   selector: 'app-interview',
-  standalone: true,
-  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="feature-page">
       <header class="page-header">
-        <h1>Mock interview</h1>
-        <p>Practice interviews with a weekly session limit to keep usage fair.</p>
+        <div>
+          <h1>Interview Practice</h1>
+          <p>Practice with the available interview templates.</p>
+        </div>
       </header>
 
-      @if (loading()) {
-        <p class="status" role="status">Loading your weekly quota…</p>
-      } @else if (error()) {
-        <div class="banner banner--error" role="alert">
-          <p>{{ error() }}</p>
-          <button type="button" class="btn btn--secondary" (click)="refreshQuota()">
-            Try again
-          </button>
+      @if (quotaLoading()) {
+        <div class="banner">Checking your weekly quota...</div>
+      }
+
+      @if (quotaError()) {
+        <div class="banner error" role="alert">
+          <p>{{ quotaError() }}</p>
         </div>
-      } @else if (quota()) {
-        <div class="quota-card">
-          <h2>This week</h2>
-          <dl class="quota-stats">
-            <div>
-              <dt>Attempts used</dt>
-              <dd>{{ quota()!.used }} / {{ quota()!.weekly_limit }}</dd>
-            </div>
-            <div>
-              <dt>Remaining</dt>
-              <dd>{{ quota()!.remaining }}</dd>
-            </div>
-            <div>
-              <dt>Resets</dt>
-              <dd>{{ formatReset(quota()!.resets_at) }}</dd>
-            </div>
-          </dl>
+      }
+
+      @if (quota()) {
+        <section class="quota-card">
+          <div>
+            <span class="eyebrow">Weekly quota</span>
+            <h2>Mock interviews</h2>
+            <p>Your weekly interview allowance is enforced when a session starts.</p>
+          </div>
 
           @if (quotaExhausted()) {
-            <div class="banner banner--warn" role="status">
-              You have used all {{ quota()!.weekly_limit }} mock interviews for this week.
-              Your quota resets {{ formatReset(quota()!.resets_at) }}.
+            <div class="quota-warning" role="status">
+              Your weekly mock interview quota has been reached.
             </div>
           }
 
           @if (activeSessionId()) {
-            <p class="session-note">
-              Active session:
-              <code>{{ activeSessionId() }}</code>
-            </p>
-          }
-
-          <div class="actions">
             <button
               type="button"
-              class="btn btn--primary"
-              [disabled]="starting() || quotaExhausted()"
-              (click)="startNewSession()"
-            >
-              @if (starting()) {
-                Starting…
-              } @else {
-                Start interview
-              }
+              class="secondary-button"
+              [disabled]="starting()"
+              (click)="resumeSession()">
+              {{ starting() ? 'Opening...' : 'Resume interview' }}
             </button>
+          }
+        </section>
+      }
 
-            @if (activeSessionId()) {
-              <button
-                type="button"
-                class="btn btn--secondary"
-                [disabled]="starting()"
-                (click)="resumeSession()"
-              >
-                Resume session
-              </button>
-            }
+      <section class="catalog">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Interview catalog</span>
+            <h2>Choose an interview</h2>
           </div>
 
-          @if (startMessage()) {
-            <p class="status" [class.status--error]="startError()">{{ startMessage() }}</p>
-          }
+          <button
+            type="button"
+            class="secondary-button"
+            [disabled]="loading()"
+            (click)="load()">
+            {{ loading() ? 'Loading...' : 'Refresh' }}
+          </button>
         </div>
-      }
-    </section>
-    <div class="interview-page">
-      <header class="page-header">
-        <h1>Interview</h1>
-        <p>Choose a published interview and start a new session.</p>
-      </header>
 
-      @if (loading()) {
-        <p class="status" role="status">Loading interviews…</p>
-      } @else if (loadError()) {
-        <div class="banner error" role="alert">
-          <p>{{ loadError() }}</p>
-          <button type="button" class="btn-outline" (click)="load()">Try again</button>
-        </div>
-      } @else if (groups().length === 0) {
-        <p class="status">No published interviews are available yet.</p>
-      } @else {
+        @if (loadError()) {
+          <div class="banner error" role="alert">
+            <p>{{ loadError() }}</p>
+          </div>
+        }
+
         @if (startError()) {
           <div class="banner error" role="alert">
-            <p>{{ startError() }}</p>
+            <p>{{ startMessage() }}</p>
+          </div>
+        }
+
+        @if (!loading() && !loadError() && templates().length === 0) {
+          <div class="empty-state">
+            <h3>No interviews available</h3>
+            <p>There are no published interview templates available right now.</p>
           </div>
         }
 
         @for (group of groups(); track group.kind) {
-          <section class="group" [attr.aria-labelledby]="'interview-group-' + group.kind">
-            <h2 [id]="'interview-group-' + group.kind">{{ group.label }}</h2>
-            <div class="cards">
+          <section class="template-group">
+            <h3>{{ group.label }}</h3>
+
+            <div class="template-grid">
               @for (template of group.templates; track template.id) {
-                <article class="card">
-                  <p class="kind">{{ group.label }}</p>
-                  <h3>{{ template.title }}</h3>
-                  <p class="description">{{ group.description }}</p>
-                  <p class="meta">{{ template.durationMinutes }} minutes</p>
+                <article class="template-card">
+                  <div class="template-content">
+                    <span class="template-kind">{{ group.label }}</span>
+                    <h4>{{ template.title }}</h4>
+
+                    @if (template.description) {
+                      <p>{{ template.description }}</p>
+                    }
+                  </div>
+
                   <button
                     type="button"
-                    class="btn-primary"
-                    [disabled]="startingId() !== null"
-                    (click)="start(template)"
-                  >
-                    {{ startingId() === template.id ? 'Starting…' : 'Start' }}
+                    class="primary-button"
+                    [disabled]="startingId() !== null || quotaExhausted()"
+                    (click)="start(template)">
+                    {{ startingId() === template.id ? 'Starting...' : 'Start interview' }}
                   </button>
                 </article>
               }
             </div>
           </section>
         }
-      }
-    </div>
+      </section>
+    </section>
   `,
-  styles: `
-    .interview-page {
-      max-width: 960px;
+  styles: [`
+    :host {
+      display: block;
+    }
+
+    .feature-page {
+      max-width: 1100px;
       margin: 0 auto;
-      padding: 48px 24px 72px;
+      padding: 32px 24px 48px;
     }
-    .page-header h1 {
-      margin: 0 0 8px;
-      color: var(--navy);
-      font-family: 'Poppins', sans-serif;
-    }
-    .page-header p {
-      margin: 0;
-      color: var(--muted);
-    }
+
+    .page-header,
+    .section-heading,
     .quota-card {
-      margin-top: 32px;
-      padding: 24px;
-      border: 1px solid var(--border, #e2e8f0);
-      border-radius: 12px;
-      background: var(--surface, #fff);
-    }
-    .quota-card h2 {
-      margin: 0 0 16px;
-      font-size: 1.125rem;
-      color: var(--navy);
-    }
-    .quota-stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 16px;
-      margin: 0 0 20px;
-    }
-    .quota-stats dt {
-    .page-header p,
-    .status,
-    .description,
-    .meta {
-      margin: 0;
-      font-size: 0.8125rem;
-      color: var(--muted);
-    }
-    .quota-stats dd {
-      margin: 4px 0 0;
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: var(--navy);
-    }
-    .banner {
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      font-size: 0.9375rem;
-    }
-    .banner--error {
-      background: #fef2f2;
-      color: #991b1b;
-      border: 1px solid #fecaca;
-    }
-    .banner--warn {
-      background: #fffbeb;
-      color: #92400e;
-      border: 1px solid #fde68a;
-    }
-    .actions {
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 8px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
     }
-    .btn {
-      cursor: pointer;
+
+    .page-header {
+      margin-bottom: 24px;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+    }
+
+    .page-header p,
+    .template-content p,
+    .quota-card p {
+      margin-bottom: 0;
+      opacity: 0.75;
+    }
+
+    .eyebrow {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.65;
+    }
+
+    .quota-card {
+      margin-bottom: 36px;
+      padding: 22px;
+      border: 1px solid #e3e3e3;
+      border-radius: 14px;
+    }
+
+    .quota-warning {
+      padding: 10px 14px;
       border-radius: 8px;
-      padding: 10px 18px;
-      font-size: 0.9375rem;
-      border: none;
+      font-weight: 600;
     }
-    .btn:disabled {
-      opacity: 0.55;
+
+    .catalog {
+      margin-top: 24px;
+    }
+
+    .section-heading {
+      margin-bottom: 20px;
+    }
+
+    .template-group {
+      margin-bottom: 32px;
+    }
+
+    .template-group > h3 {
+      margin-bottom: 14px;
+    }
+
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .template-card {
+      display: flex;
+      min-height: 190px;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 20px;
+      border: 1px solid #e3e3e3;
+      border-radius: 14px;
+    }
+
+    .template-kind {
+      display: inline-block;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      opacity: 0.65;
+    }
+
+    .template-card h4 {
+      margin-bottom: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
+    }
+
+    button:disabled {
       cursor: not-allowed;
+      opacity: 0.55;
     }
-    .btn--primary {
-      background: var(--primary, #2563eb);
-      color: #fff;
+
+    .primary-button {
+      align-self: flex-start;
     }
-    .btn--secondary {
-      background: transparent;
-      border: 1px solid var(--border, #cbd5e1);
-      color: var(--navy);
+
+    .secondary-button {
+      white-space: nowrap;
     }
-    .status {
-      margin-top: 16px;
-      color: var(--muted);
-      font-size: 0.9375rem;
+
+    .banner,
+    .empty-state {
+      margin: 16px 0;
+      padding: 16px;
+      border-radius: 10px;
+      border: 1px solid #e3e3e3;
     }
-    .status--error {
-      color: #b91c1c;
+
+    .banner.error {
+      border-color: #d88;
     }
-    .session-note {
-      font-size: 0.875rem;
-      color: var(--muted);
-      word-break: break-all;
+
+    .empty-state {
+      text-align: center;
     }
-    code {
-      font-size: 0.8125rem;
+
+    @media (max-width: 700px) {
+      .page-header,
+      .section-heading,
+      .quota-card {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .feature-page {
+        padding: 24px 16px 40px;
+      }
     }
-  `
+  `],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class Interview implements OnInit {
+  private readonly catalog = inject(InterviewCatalogService);
   private readonly interviewService = inject(InterviewService);
+  private readonly router = inject(Router);
 
   readonly loading = signal(true);
-  readonly error = signal<string | null>(null);
+  readonly loadError = signal<string | null>(null);
+  readonly templates = signal<InterviewTemplate[]>([]);
+  readonly startingId = signal<string | null>(null);
+
+  readonly quotaLoading = signal(true);
+  readonly quotaError = signal<string | null>(null);
   readonly quota = signal<InterviewQuota | null>(null);
   readonly quotaExhausted = signal(false);
+
   readonly starting = signal(false);
-  readonly startMessage = signal<string | null>(null);
   readonly startError = signal(false);
+  readonly startMessage = signal<string | null>(null);
   readonly activeSessionId = signal<string | null>(this.readStoredSessionId());
 
-  async ngOnInit(): Promise<void> {
-    await this.refreshQuota();
-  }
+  readonly groups = computed<CatalogGroup[]>(() => {
+    const templates = this.templates();
 
-  @HostListener('window:focus')
-  onWindowFocus(): void {
-    void this.refreshQuota();
-  }
-
-  async refreshQuota(): Promise<void> {
-    this.loading.set(true);
-    this.error.set(null);
-
-    const result = await this.interviewService.loadQuota();
-    this.loading.set(false);
-
-    if (!result.ok) {
-      this.error.set(result.error);
-      this.quota.set(null);
-      return;
-    }
-
-    this.quota.set(result.quota);
-    this.quotaExhausted.set(result.quota.remaining <= 0);
-  }
-
-  async startNewSession(): Promise<void> {
-    if (this.starting() || this.quotaExhausted()) {
-      return;
-    }
-
-    this.starting.set(true);
-    this.startMessage.set(null);
-    this.startError.set(false);
-
-    const outcome = await this.interviewService.startInterview();
-    this.starting.set(false);
-
-    if (!outcome.ok) {
-      this.startError.set(true);
-      this.startMessage.set(outcome.error);
-      if (outcome.quotaExhausted) {
-        this.quotaExhausted.set(true);
-        if (outcome.quota && !outcome.quotaDetailsIncomplete) {
-          this.quota.set(outcome.quota);
-        } else {
-          await this.refreshQuota();
-        }
+    const groups: CatalogGroup[] = [
+      {
+        kind: InterviewTemplateKind.Technical,
+        label: 'Technical',
+        templates: templates.filter(t => t.kind === InterviewTemplateKind.Technical)
+      },
+      {
+        kind: InterviewTemplateKind.Behavioral,
+        label: 'Behavioral',
+        templates: templates.filter(t => t.kind === InterviewTemplateKind.Behavioral)
+      },
+      {
+        kind: InterviewTemplateKind.Mixed,
+        label: 'Mixed',
+        templates: templates.filter(t => t.kind === InterviewTemplateKind.Mixed)
       }
+    ];
+
+    return groups.filter(group => group.templates.length > 0);
+  });
+
+  async ngOnInit(): Promise<void> {
+    await Promise.all([
+      this.refreshQuota(),
+      this.load()
+    ]);
+  }
+
+  async load(): Promise<void> {
+    this.loading.set(true);
+    this.loadError.set(null);
+
+    try {
+      const templates = await this.catalog.listPublishedTemplates();
+      this.templates.set(templates);
+    } catch (error) {
+      this.loadError.set(interviewErrorMessage(error));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  async start(template: InterviewTemplate): Promise<void> {
+    if (this.startingId() !== null || this.quotaExhausted()) {
       return;
     }
 
-    this.persistSessionId(outcome.result.session_id);
-    this.activeSessionId.set(outcome.result.session_id);
+    this.startingId.set(template.id);
     this.startError.set(false);
-    this.startMessage.set(
-      outcome.result.resumed
-        ? 'Resumed your in-progress session.'
-        : 'Interview session started. One attempt has been used for this week.'
-    );
-    await this.refreshQuota();
+    this.startMessage.set(null);
+
+    try {
+      const sessionId = await this.catalog.startSession(template);
+
+      this.storeSessionId(sessionId);
+      this.activeSessionId.set(sessionId);
+
+      await this.router.navigate(['/interview/session', sessionId]);
+    } catch (error) {
+      this.startError.set(true);
+      this.startMessage.set(interviewErrorMessage(error));
+      await this.refreshQuota();
+    } finally {
+      this.startingId.set(null);
+    }
   }
 
   async resumeSession(): Promise<void> {
     const sessionId = this.activeSessionId();
+
     if (!sessionId || this.starting()) {
       return;
     }
 
     this.starting.set(true);
-    this.startMessage.set(null);
     this.startError.set(false);
+    this.startMessage.set(null);
 
-    const outcome = await this.interviewService.startInterview({
-      resumeSessionId: sessionId
-    });
-    this.starting.set(false);
+    try {
+      const outcome = await this.interviewService.startInterview({
+        resumeSessionId: sessionId
+      });
 
-    if (!outcome.ok) {
+      if (!outcome.sessionId) {
+        throw new Error('Unable to resume the interview session.');
+      }
+
+      this.storeSessionId(outcome.sessionId);
+      this.activeSessionId.set(outcome.sessionId);
+
+      await this.router.navigate(['/interview/session', outcome.sessionId]);
+    } catch (error) {
       this.startError.set(true);
-      this.startMessage.set(outcome.error);
-      if (outcome.error.includes('not resumable') || outcome.error.includes('not found')) {
+      this.startMessage.set(interviewErrorMessage(error));
+
+      const message = interviewErrorMessage(error).toLowerCase();
+      if (message.includes('not resumable') || message.includes('not found')) {
         this.clearStoredSessionId();
         this.activeSessionId.set(null);
       }
-      return;
-    }
 
-    this.startError.set(false);
-    this.startMessage.set('Resumed your in-progress session.');
-    await this.refreshQuota();
+      await this.refreshQuota();
+    } finally {
+      this.starting.set(false);
+    }
   }
 
-  formatReset(iso: string): string {
+  private async refreshQuota(): Promise<void> {
+    this.quotaLoading.set(true);
+    this.quotaError.set(null);
+
     try {
-      return new Intl.DateTimeFormat(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'Asia/Kolkata'
-      }).format(new Date(iso));
-    } catch {
-      return iso;
+      const result = await this.interviewService.loadQuota();
+      this.quota.set(result);
+      this.quotaExhausted.set(
+        Number(result.remaining ?? 0) <= 0
+      );
+    } catch (error) {
+      this.quota.set(null);
+      this.quotaExhausted.set(false);
+      this.quotaError.set(interviewErrorMessage(error));
+    } finally {
+      this.quotaLoading.set(false);
     }
   }
 
@@ -405,11 +455,11 @@ export class Interview implements OnInit {
     }
   }
 
-  private persistSessionId(sessionId: string): void {
+  private storeSessionId(sessionId: string): void {
     try {
       sessionStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
     } catch {
-      /* storage unavailable */
+      // Storage can be unavailable; navigation still works.
     }
   }
 
@@ -417,120 +467,13 @@ export class Interview implements OnInit {
     try {
       sessionStorage.removeItem(ACTIVE_SESSION_KEY);
     } catch {
-      /* storage unavailable */
-    .group {
-      margin-top: 32px;
-    }
-    .group h2 {
-      margin: 0 0 12px;
-      color: var(--navy);
-      font-size: 1.15rem;
-    }
-    .cards {
-      display: grid;
-      gap: 16px;
-    }
-    @media (min-width: 768px) {
-      .cards {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-    .card {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 20px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-    }
-    .kind {
-      margin: 0;
-      color: var(--purple);
-      font-size: 0.75rem;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .card h3 {
-      margin: 0;
-      color: var(--navy);
-      font-size: 1.15rem;
-    }
-    .card .btn-primary {
-      align-self: flex-start;
-      margin-top: 8px;
-    }
-    .card .btn-primary:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .banner {
-      margin-top: 20px;
-      padding: 14px 16px;
-      border-radius: 12px;
-    }
-    .banner p {
-      margin: 0 0 12px;
-    }
-    .banner.error {
-      background: #fdecec;
-      color: var(--navy);
-      border: 1px solid #f3c2c2;
-    }
-  `,
-})
-export class Interview implements OnInit {
-  private readonly catalog = inject(InterviewCatalogService);
-  private readonly router = inject(Router);
-
-  readonly loading = signal(true);
-  readonly loadError = signal<string | null>(null);
-  readonly startError = signal<string | null>(null);
-  readonly startingId = signal<string | null>(null);
-  readonly templates = signal<InterviewTemplate[]>([]);
-
-  readonly groups = computed<CatalogGroup[]>(() => {
-    const templates = this.templates();
-    return KIND_ORDER.map((kind) => ({
-      kind,
-      label: KIND_COPY[kind].label,
-      description: KIND_COPY[kind].description,
-      templates: templates.filter((template) => template.kind === kind),
-    })).filter((group) => group.templates.length > 0);
-  });
-
-  ngOnInit(): void {
-    void this.load();
-  }
-
-  async load(): Promise<void> {
-    this.loading.set(true);
-    this.loadError.set(null);
-    try {
-      this.templates.set(await this.catalog.listPublishedTemplates());
-    } catch (error: unknown) {
-      this.templates.set([]);
-      this.loadError.set(interviewErrorMessage(error, 'Could not load interviews.'));
-    } finally {
-      this.loading.set(false);
+      // Storage can be unavailable.
     }
   }
 
-  async start(template: InterviewTemplate): Promise<void> {
-    if (this.startingId()) return;
-    this.startingId.set(template.id);
-    this.startError.set(null);
-    try {
-      const sessionId = await this.catalog.startSession(template);
-      const opened = await this.router.navigate(['/interview/session', sessionId]);
-      if (!opened) {
-        this.startError.set('The interview started, but the session page could not be opened.');
-      }
-    } catch (error: unknown) {
-      this.startError.set(interviewErrorMessage(error, 'Could not start this interview.'));
-    } finally {
-      this.startingId.set(null);
-    }
+  @HostListener('window:beforeunload')
+  onBeforeUnload(): void {
+    // Intentionally do not clear an active session here.
+    // The student may return and resume it.
   }
 }
