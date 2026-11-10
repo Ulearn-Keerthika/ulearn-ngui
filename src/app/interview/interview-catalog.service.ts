@@ -229,51 +229,29 @@ export class InterviewCatalogService {
   }
 
   /**
-   * Insert an in-progress session for the signed-in student.
+   * Start an in-progress session via interview-start (INT-006 quota).
    * Pins prompt_version + template_version_id to the template's current snapshot.
    * Returns the new session id.
    */
   async startSession(template: InterviewTemplate, resumeText?: string | null): Promise<string> {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError) throw userError;
-    const userId = userData.user?.id;
-    if (!userId) {
-      throw new Error('Sign in again to start an interview.');
-    }
-
     const version = await this.latestPublishedTemplateVersion(template.id);
     if (!version) {
       throw new Error('This interview is not available right now.');
     }
 
-    const row: {
-      user_id: string;
-      template_id: string;
-      status: 'in_progress';
-      prompt_version: string;
-      template_version_id: string;
-      resume_text?: string;
-    } = {
-      user_id: userId,
-      template_id: template.id,
-      status: 'in_progress',
-      prompt_version: formatTemplateVersionNumber(version.version),
-      template_version_id: version.id,
-    };
     const resume = typeof resumeText === 'string' ? resumeText.trim() : '';
-    if (resume) row.resume_text = resume;
+    const outcome = await this.interviewService.startInterview({
+      templateId: template.id,
+      promptVersion: formatTemplateVersionNumber(version.version),
+      templateVersionId: version.id,
+      resumeText: resume || undefined,
+    });
 
-    const { data, error } = await supabase
-      .from('interview_sessions')
-      .insert(row)
-      .select('id')
-      .single();
-
-    if (error) throw error;
-    if (!isRecord(data) || typeof data['id'] !== 'string' || !data['id']) {
-      throw new Error('The interview session was not created.');
+    if (!outcome.ok) {
+      throw new Error(outcome.error || 'The interview session was not created.');
     }
-    return data['id'];
+
+    return outcome.result.session_id;
   }
 
   /**
@@ -292,16 +270,6 @@ export class InterviewCatalogService {
     const userId = userData.user?.id;
     if (!userId) {
       throw new Error('Sign in again to start an interview.');
-    }
-
-    const quota = await this.interviewService.loadQuota();
-    if (!quota.ok) {
-      throw new Error(quota.error || 'Could not load weekly interview quota.');
-    }
-    if (quota.quota.remaining <= 0) {
-      throw new Error(
-        `Weekly mock interview limit reached (${quota.quota.used}/${quota.quota.weekly_limit}). Try again after your quota resets.`
-      );
     }
 
     const { data: parentRaw, error: parentError } = await supabase
@@ -328,28 +296,21 @@ export class InterviewCatalogService {
       throw new Error('This interview could not be redone.');
     }
 
-    const insertPayload: Record<string, unknown> = {
-      user_id: userId,
-      template_id: parent.template_id,
-      status: 'in_progress',
-      prompt_version: parent.prompt_version,
-      redo_of_session_id: parent.id,
-    };
-    if (typeof parent.template_version_id === 'string' && parent.template_version_id) {
-      insertPayload['template_version_id'] = parent.template_version_id;
+    const outcome = await this.interviewService.startInterview({
+      templateId: parent.template_id,
+      promptVersion: parent.prompt_version,
+      templateVersionId:
+        typeof parent.template_version_id === 'string' && parent.template_version_id
+          ? parent.template_version_id
+          : undefined,
+      redoOfSessionId: parent.id,
+    });
+
+    if (!outcome.ok) {
+      throw new Error(outcome.error || 'The redo interview session was not created.');
     }
 
-    const { data, error } = await supabase
-      .from('interview_sessions')
-      .insert(insertPayload)
-      .select('id')
-      .single();
-
-    if (error) throw error;
-    if (!isRecord(data) || typeof data['id'] !== 'string' || !data['id']) {
-      throw new Error('The redo interview session was not created.');
-    }
-    return data['id'];
+    return outcome.result.session_id;
   }
 
   /** Latest published snapshot for a template (INT-009). */

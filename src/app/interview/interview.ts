@@ -502,6 +502,7 @@ export class Interview implements OnInit {
       }
     } catch (error: unknown) {
       this.startError.set(interviewErrorMessage(error, 'Could not start this interview.'));
+      await this.refreshQuota();
     } finally {
       this.startingId.set(null);
     }

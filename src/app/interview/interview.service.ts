@@ -72,10 +72,32 @@ export class InterviewService {
     return { ok: true, quota };
   }
 
-  async startInterview(options?: { resumeSessionId?: string }): Promise<InterviewStartOutcome> {
+  async startInterview(options?: {
+    templateId?: string;
+    promptVersion?: string;
+    templateVersionId?: string;
+    resumeText?: string;
+    resumeSessionId?: string;
+    redoOfSessionId?: string;
+  }): Promise<InterviewStartOutcome> {
     const body: Record<string, unknown> = {};
+    if (options?.templateId) {
+      body['template_id'] = options.templateId;
+    }
+    if (options?.promptVersion) {
+      body['prompt_version'] = options.promptVersion;
+    }
+    if (options?.templateVersionId) {
+      body['template_version_id'] = options.templateVersionId;
+    }
+    if (options?.resumeText) {
+      body['resume_text'] = options.resumeText;
+    }
     if (options?.resumeSessionId) {
       body['session_id'] = options.resumeSessionId;
+    }
+    if (options?.redoOfSessionId) {
+      body['redo_of_session_id'] = options.redoOfSessionId;
     }
 
     const { data, error } = await invokeAuthedFunction<
@@ -115,7 +137,7 @@ export class InterviewService {
     const result = {
       ...this.normalizeQuota(payload),
       session_id: payload.session_id,
-      status: payload.status ?? 'started',
+      status: payload.status ?? 'in_progress',
       resumed: payload.resumed === true
     };
     this.lastKnownQuota = this.normalizeQuota(result);

@@ -75,7 +75,7 @@ check('interview-turn loads the session snapshot before the live template', () =
 
 check('student startSession pins template_version_id', () => {
   const source = read('src/app/interview/interview-catalog.service.ts');
-  assert.match(source, /template_version_id: version\.id/);
+  assert.match(source, /templateVersionId: version\.id/);
   assert.match(source, /formatTemplateVersionNumber\(version\.version\)/);
   assert.match(source, /latestPublishedTemplateVersion/);
 });
