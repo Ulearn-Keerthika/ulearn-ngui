@@ -257,6 +257,21 @@ BEGIN
     IF NEW.overall_score IS NOT NULL THEN
       RAISE EXCEPTION 'overall_score is written by the evaluator';
     END IF;
+    IF NEW.evaluation_status IS NOT NULL
+       OR NEW.eval_version IS NOT NULL
+       OR NEW.evaluated_at IS NOT NULL
+       OR NEW.evaluation_summary IS NOT NULL
+       OR NEW.evaluation_claimed_at IS NOT NULL
+       OR NEW.evaluation_strengths IS DISTINCT FROM '[]'::jsonb
+       OR NEW.evaluation_improvements IS DISTINCT FROM '[]'::jsonb
+       OR (
+         to_jsonb(NEW) ? 'evaluation_tips'
+         AND to_jsonb(NEW)->'evaluation_tips' IS NOT NULL
+         AND to_jsonb(NEW)->'evaluation_tips' <> 'null'::jsonb
+       )
+    THEN
+      RAISE EXCEPTION 'interview evaluation is written by the evaluator';
+    END IF;
   ELSIF TG_OP = 'UPDATE' THEN
     IF NEW.template_id IS DISTINCT FROM OLD.template_id THEN
       RAISE EXCEPTION 'interview session template cannot be changed';
@@ -273,6 +288,20 @@ BEGIN
     IF NEW.overall_score IS DISTINCT FROM OLD.overall_score THEN
       RAISE EXCEPTION 'overall_score is written by the evaluator';
     END IF;
+    IF NEW.evaluation_status IS DISTINCT FROM OLD.evaluation_status
+       OR NEW.eval_version IS DISTINCT FROM OLD.eval_version
+       OR NEW.evaluated_at IS DISTINCT FROM OLD.evaluated_at
+       OR NEW.evaluation_summary IS DISTINCT FROM OLD.evaluation_summary
+       OR NEW.evaluation_strengths IS DISTINCT FROM OLD.evaluation_strengths
+       OR NEW.evaluation_improvements IS DISTINCT FROM OLD.evaluation_improvements
+       OR NEW.evaluation_claimed_at IS DISTINCT FROM OLD.evaluation_claimed_at
+       OR (
+         to_jsonb(NEW) ? 'evaluation_tips'
+         AND (to_jsonb(NEW)->'evaluation_tips') IS DISTINCT FROM (to_jsonb(OLD)->'evaluation_tips')
+       )
+    THEN
+      RAISE EXCEPTION 'interview evaluation is written by the evaluator';
+    END IF;
     IF OLD.status <> 'in_progress' AND NEW.status IS DISTINCT FROM OLD.status THEN
       RAISE EXCEPTION 'a finished interview session cannot change status';
     END IF;
@@ -282,6 +311,21 @@ BEGIN
   END IF;
 
   RETURN NEW;
+END;
+$$;
+
+-- Align with INT-008 column grants when evaluation_tips already exists on the table.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'interview_sessions'
+      AND column_name = 'evaluation_tips'
+  ) THEN
+    EXECUTE 'REVOKE UPDATE (evaluation_tips) ON TABLE public.interview_sessions FROM authenticated';
+  END IF;
 END;
 $$;
 
